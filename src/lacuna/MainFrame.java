@@ -29,26 +29,25 @@ public class MainFrame extends JFrame {
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
         plateau = new BoardPanel(modele, null);
-
         GameController controleur = new GameController(modele, plateau, panelTop, panelBottom);
-
-        plateau = new BoardPanel(modele, controleur);
+        plateau.setController(controleur);
 
         getContentPane().removeAll();
         getContentPane().setLayout(new BorderLayout());
         getContentPane().setBackground(new Color(20, 22, 35));
-        
-        getContentPane().add(panelTop,     BorderLayout.NORTH);
-        getContentPane().add(plateau,      BorderLayout.CENTER);
-        getContentPane().add(panelBottom,  BorderLayout.SOUTH);
-        
+
+        getContentPane().add(panelTop, BorderLayout.NORTH);
+        getContentPane().add(plateau, BorderLayout.CENTER);
+        getContentPane().add(panelBottom, BorderLayout.SOUTH);
+
         getContentPane().revalidate();
         getContentPane().repaint();
     }
 
     private String demanderNom(String invite, String valeurDefaut) {
         String saisie = JOptionPane.showInputDialog(null, invite, valeurDefaut);
-        if (saisie == null || saisie.isBlank()) return valeurDefaut;
+        if (saisie == null || saisie.isBlank())
+            return valeurDefaut;
         return saisie.trim();
     }
 

@@ -1,7 +1,7 @@
 package lacuna;
 
 import javax.swing.*;
-import java.util.List;
+
 
 public class GameController {
     private final GameModel model;
@@ -18,7 +18,8 @@ public class GameController {
 
     public void onPlacementValid(Flower f1, Flower f2, double posX, double posY) {
         boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
-        if (!success) return;
+        if (!success)
+            return;
 
         panelTop.rafraichir();
         panelBottom.rafraichir();
@@ -40,13 +41,15 @@ public class GameController {
     private void afficherResultat() {
         Player vainqueur = model.getVainqueur();
         String msg = "Fin de partie !\n\n";
-        
+
         int[] majorites = model.calculerMajoritesCouleurs();
         int j1Maj = 0, j2Maj = 0;
-        
+
         for (int m : majorites) {
-            if (m == 0) j1Maj++;
-            if (m == 1) j2Maj++;
+            if (m == 0)
+                j1Maj++;
+            if (m == 1)
+                j2Maj++;
         }
 
         msg += model.getJoueurs()[0].getName() + " remporte " + j1Maj + " couleurs.\n";
@@ -59,13 +62,14 @@ public class GameController {
         }
 
         int choix = JOptionPane.showOptionDialog(board, msg, "Victoire",
-            JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE, null,
-            new String[]{"Rejouer", "Quitter"}, "Rejouer");
+                JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE, null,
+                new String[] { "Rejouer", "Quitter" }, "Rejouer");
 
         if (choix == JOptionPane.YES_OPTION) {
             SwingUtilities.invokeLater(() -> {
                 JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(board);
-                if (parent instanceof MainFrame mf) mf.relancerPartie();
+                if (parent instanceof MainFrame mf)
+                    mf.relancerPartie();
             });
         } else {
             System.exit(0);
