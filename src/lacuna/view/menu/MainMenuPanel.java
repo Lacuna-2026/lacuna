@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
-import java.util.function.BiConsumer;
 
 public class MainMenuPanel extends JPanel {
     private static final String MODE_NORMAL = "Normal";
@@ -15,13 +14,19 @@ public class MainMenuPanel extends JPanel {
     private final BufferedImage blueFlower = MenuAssets.load("main_men_blue.png");
     private final BufferedImage pinkFlower = MenuAssets.load("main_men_pink.png");
 
-    private final BiConsumer<String, String> onLocalPlay;
+    private final MenuCallback onPlay;
     private final SegmentedChoice modeSelect;
     private final JPanel modeFields;
     private final PrimaryButton playButton;
 
-    public MainMenuPanel(BiConsumer<String, String> onLocalPlay) {
-        this.onLocalPlay = onLocalPlay;
+    /** Callback : (nom1, nom2, aiDifficulty) — aiDifficulty=0 pour mode Normal */
+    @FunctionalInterface
+    public interface MenuCallback {
+        void start(String name1, String name2, int aiDifficulty);
+    }
+
+    public MainMenuPanel(MenuCallback onPlay) {
+        this.onPlay = onPlay;
         this.modeSelect = new SegmentedChoice(MODE_NORMAL, MODE_AI, MODE_ONLINE);
         this.modeFields = MenuTheme.verticalPanel();
         this.playButton = new PrimaryButton("Jouer Lacuna");
@@ -102,7 +107,7 @@ public class MainMenuPanel extends JPanel {
         playButton.addActionListener((ActionEvent e) -> {
             String nom1 = valueOrDefault(playerOne.getText(), "Joueur 1");
             String nom2 = valueOrDefault(playerTwo.getText(), "Joueur 2");
-            onLocalPlay.accept(nom1, nom2);
+            onPlay.start(nom1, nom2, 0);
         });
 
         refreshFields();
@@ -111,14 +116,20 @@ public class MainMenuPanel extends JPanel {
     private void showAiFields() {
         modeFields.removeAll();
 
+        JTextField playerName = MenuTheme.textField("Votre nom");
         SegmentedChoice levels = new SegmentedChoice("Facile", "Moyen", "Difficile");
-        levels.setEnabled(false);
 
+        addLabeledField("Votre nom", playerName);
         addLabeledField("Niveau de l'AI", levels);
-        modeFields.add(Box.createVerticalStrut(12));
-        modeFields.add(MenuTheme.label("Mode AI indisponible pour le moment.", 13, MenuTheme.MUTED_TEXT));
 
-        playButton.prepare("Indisponible", false, true);
+        playButton.prepare("Jouer contre l'IA", true, true);
+        playButton.addActionListener((ActionEvent e) -> {
+            String nom = valueOrDefault(playerName.getText(), "Joueur");
+            String level = levels.selectedValue();
+            int difficulty = "Facile".equals(level) ? 1 : "Moyen".equals(level) ? 2 : 3;
+            onPlay.start(nom, "IA", difficulty);
+        });
+
         refreshFields();
     }
 

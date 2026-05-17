@@ -264,7 +264,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private boolean isInputBlocked() {
-        return wordSplash.active() || flowerIntro.blocksInput() || placement.active();
+        return wordSplash.active() || flowerIntro.blocksInput() || placement.active()
+            || (controller != null && controller.isAiTurn());
     }
 
     private Pawn nextUnplacedPawn(Player player) {

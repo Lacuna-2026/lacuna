@@ -16,6 +16,7 @@ public class AIFlower {
         this.ownerIndex = ownerIndex;
     }
 
+
     public AIFlower copy() {
         return new AIFlower(index, color, x, y, ownerIndex);
     }

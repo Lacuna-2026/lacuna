@@ -1,20 +1,23 @@
 package lacuna.model.AI;
 
-import lacuna.model.*;
+import java.util.ArrayList;
 import java.util.List;
+import lacuna.model.*;
 
 public class AIState {
     public final AIFlower[] flowers;
     public final AIPawn[] pawns;
     public final int currentPlayer;
     public final int[] pawnsPlaced;
+    public final int[][] colorGroups;
 
     public AIState(AIFlower[] flowers, AIPawn[] pawns,
-            int currentPlayer, int[] pawnsPlaced) {
+            int currentPlayer, int[] pawnsPlaced, int[][] colorGroups) {
         this.flowers = flowers;
         this.pawns = pawns;
         this.currentPlayer = currentPlayer;
         this.pawnsPlaced = pawnsPlaced;
+        this.colorGroups = colorGroups;
     }
 
     public AIState copy() {
@@ -27,12 +30,28 @@ public class AIState {
             pCopy[i] = pawns[i].copy();
 
         return new AIState(fCopy, pCopy, currentPlayer,
-                new int[] { pawnsPlaced[0], pawnsPlaced[1] });
+                new int[] { pawnsPlaced[0], pawnsPlaced[1] }, this.colorGroups);
     }
 
     public boolean isTerminal() {
         return pawnsPlaced[0] >= GameModel.PAWNS_PER_PLAYER
                 && pawnsPlaced[1] >= GameModel.PAWNS_PER_PLAYER;
+    }
+
+    public long computeHash() {
+        long hash = 17;
+        hash = hash * 31 + currentPlayer;
+        for (AIFlower f : flowers) {
+            hash = hash * 31 + f.ownerIndex;
+        }
+        for (AIPawn p : pawns) {
+            if (p.placed) {
+                hash = hash * 31 + Double.doubleToLongBits(p.x);
+                hash = hash * 31 + Double.doubleToLongBits(p.y);
+                hash = hash * 31 + p.ownerIndex;
+            }
+        }
+        return hash;
     }
 
     public static AIState fromModel(GameModel model) {
@@ -66,6 +85,19 @@ public class AIState {
                 realPlayers[1].getPawnsPlaced()
         };
 
-        return new AIState(flowers, pawns, current, placed);
+        int numColors = FlowerColor.values().length;
+        List<List<Integer>> groups = new ArrayList<>();
+        for (int c = 0; c < numColors; c++) groups.add(new ArrayList<>());
+        for (int i = 0; i < flowers.length; i++) {
+            groups.get(flowers[i].color.ordinal()).add(i);
+        }
+        int[][] colorGroups = new int[numColors][];
+        for (int c = 0; c < numColors; c++) {
+            List<Integer> g = groups.get(c);
+            colorGroups[c] = new int[g.size()];
+            for (int i = 0; i < g.size(); i++) colorGroups[c][i] = g.get(i);
+        }
+
+        return new AIState(flowers, pawns, current, placed, colorGroups);
     }
 }
