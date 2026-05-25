@@ -10,11 +10,10 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 
 public class PlayerPanel extends JPanel implements ModelListener {
-    private static final int PANEL_HEIGHT = 54;
+    private static final int PANEL_WIDTH = 130;
     private static final int ICON_SIZE = 22;
-    private static final int SCORE_ITEM_WIDTH = 52;
+    private static final int SCORE_ITEM_WIDTH = 100;
     private static final int SCORE_ITEM_HEIGHT = 34;
-    private static final int SCORE_ICON_GAP = 6;
     private static final Color WIN_AURA = new Color(74, 218, 126);
     private static final Color LOSE_AURA = new Color(239, 80, 88);
     private static final Color TIE_AURA = new Color(174, 174, 184);
@@ -24,33 +23,46 @@ public class PlayerPanel extends JPanel implements ModelListener {
     private final JLabel nameLabel;
     private final JLabel pawnLabel;
     private final JPanel scoreTab;
+    private final java.util.Map<FlowerColor, Integer> previousScores = new java.util.EnumMap<>(FlowerColor.class);
+    private final java.util.Map<FlowerColor, Integer> bonusValues = new java.util.EnumMap<>(FlowerColor.class);
+    private final java.util.Map<FlowerColor, Long> scoreIncrementTimes = new java.util.EnumMap<>(FlowerColor.class);
+    private Timer bonusTimer;
+    private long bonusStartedAt;
     private Timer auraTimer;
     private long auraStartedAt;
     private float auraPulse;
 
-    public PlayerPanel(GameModel model, Player player, boolean isTop) {
+    public PlayerPanel(GameModel model, Player player, boolean isLeft) {
         this.model = model;
         this.player = player;
 
         setOpaque(false);
-        setLayout(new FlowLayout(FlowLayout.CENTER, 14, 0));
-        setPreferredSize(new Dimension(100, PANEL_HEIGHT));
-        setBorder(BorderFactory.createEmptyBorder(isTop ? 3 : 8, 0, isTop ? 8 : 3, 0));
+        setLayout(new GridBagLayout());
+        setPreferredSize(new Dimension(PANEL_WIDTH, 100));
+        setBorder(BorderFactory.createEmptyBorder(0, isLeft ? 4 : 0, 0, isLeft ? 0 : 4));
 
         nameLabel = createPlainLabel();
         pawnLabel = createPlainLabel();
         scoreTab = new RoundedTabPanel();
-        scoreTab.setLayout(new FlowLayout(FlowLayout.CENTER, 13, 0));
+        scoreTab.setLayout(new GridLayout(0, 1, 0, 6));
         scoreTab.setOpaque(false);
 
         JPanel playerTab = new RoundedTabPanel();
-        playerTab.setLayout(new FlowLayout(FlowLayout.CENTER, 11, 0));
+        playerTab.setLayout(new GridLayout(0, 1, 0, 4));
         playerTab.setOpaque(false);
         playerTab.add(nameLabel);
         playerTab.add(pawnLabel);
 
-        add(playerTab);
-        add(scoreTab);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(8, 0, 8, 0);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        add(playerTab, gbc);
+
+        gbc.gridy = 1;
+        add(scoreTab, gbc);
 
         model.addModelListener(this);
         rafraichir();
@@ -74,6 +86,17 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private void rafraichir() {
+        for (FlowerColor color : FlowerColor.values()) {
+            int current = player.getScoreForColor(color);
+            int prev = previousScores.getOrDefault(color, 0);
+            if (current > prev) {
+                bonusValues.put(color, current - prev);
+                startBonusTimer();
+                triggerPulse(color);
+            }
+            previousScores.put(color, current);
+        }
+
         int remainingPawns = GameModel.PAWNS_PER_PLAYER - player.getPawnsPlaced();
 
         nameLabel.setText(player.getName());
@@ -97,6 +120,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
         JLabel label = new JLabel();
         label.setFont(new Font("Segoe UI", Font.BOLD, 16));
         label.setForeground(Color.WHITE);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
         return label;
     }
 
@@ -107,8 +131,24 @@ public class PlayerPanel extends JPanel implements ModelListener {
             String.valueOf(playerScore),
             GameAssets.flower(color),
             scoreAura(playerScore, opponentScore),
-            playerScore
+            playerScore,
+            bonusValues.getOrDefault(color, 0),
+            color
         );
+    }
+
+    private void triggerPulse(FlowerColor color) {
+        scoreIncrementTimes.put(color, System.currentTimeMillis());
+        Timer pulseTimer = new Timer(16, e -> {
+            Long startTime = scoreIncrementTimes.get(color);
+            if (startTime == null || System.currentTimeMillis() - startTime >= 350) {
+                scoreTab.repaint();
+                ((Timer) e.getSource()).stop();
+            } else {
+                scoreTab.repaint();
+            }
+        });
+        pulseTimer.start();
     }
 
     private Player opponent() {
@@ -150,13 +190,28 @@ public class PlayerPanel extends JPanel implements ModelListener {
         }
     }
 
+    private void startBonusTimer() {
+        bonusStartedAt = System.currentTimeMillis();
+        if (bonusTimer == null) {
+            bonusTimer = new Timer(50, e -> {
+                if (System.currentTimeMillis() - bonusStartedAt > 2000) {
+                    bonusValues.clear();
+                    bonusTimer.stop();
+                    bonusTimer = null;
+                }
+                scoreTab.repaint();
+            });
+            bonusTimer.start();
+        }
+    }
+
     private boolean shouldShowAura() {
         return model.getPhase() != GameModel.GamePhase.PLACING;
     }
 
     private static final class RoundedTabPanel extends JPanel {
         RoundedTabPanel() {
-            setBorder(BorderFactory.createEmptyBorder(7, 18, 7, 18));
+            setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         }
 
         @Override
@@ -173,90 +228,91 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private final class ScoreItem extends JComponent {
-        private static final int MINI_FLOWER_SIZE = 10;
-        private static final int MINI_GAP = 1;
-        private static final int MINI_COLS = 3;
-        private static final int MINI_ROWS = 2;
-
         private final String score;
         private final BufferedImage image;
         private final Color aura;
         private final int count;
-
-        ScoreItem(String score, BufferedImage image, Color aura, int count) {
+        private final int bonus;
+        private final FlowerColor color;
+ 
+        ScoreItem(String score, BufferedImage image, Color aura, int count, int bonus, FlowerColor color) {
             this.score = score;
             this.image = image;
             this.aura = aura;
             this.count = count;
+            this.bonus = bonus;
+            this.color = color;
             setOpaque(false);
-            setFont(new Font("Segoe UI", Font.BOLD, 14));
+            setFont(new Font("Segoe UI", Font.BOLD, 16));
             setForeground(Color.WHITE);
             setPreferredSize(new Dimension(SCORE_ITEM_WIDTH, SCORE_ITEM_HEIGHT));
         }
-
+ 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             GameAssets.prepare(g2);
+ 
+            double itemScale = 1.0;
+            Long incrementTime = scoreIncrementTimes.get(color);
+            if (incrementTime != null) {
+                long elapsed = System.currentTimeMillis() - incrementTime;
+                if (elapsed < 350) {
+                    double t = elapsed / 350.0;
+                    itemScale = 1.0 + 0.14 * Math.sin(Math.PI * t);
+                } else {
+                    scoreIncrementTimes.remove(color);
+                }
+            }
 
+            if (itemScale > 1.0) {
+                double cx = getWidth() / 2.0;
+                double cy = getHeight() / 2.0;
+                g2.translate(cx, cy);
+                g2.scale(itemScale, itemScale);
+                g2.translate(-cx, -cy);
+            }
+
+            if (shouldShowAura()) {
+                g2.setColor(new Color(aura.getRed(), aura.getGreen(), aura.getBlue(), 45));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                g2.setColor(new Color(aura.getRed(), aura.getGreen(), aura.getBlue(), 120));
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 12, 12);
+            }
+ 
+            FontMetrics metrics = g2.getFontMetrics(getFont());
+            int gap = 8;
+            int textWidth = metrics.stringWidth(score);
+            int totalContentWidth = textWidth + gap + ICON_SIZE;
+            int startX = (getWidth() - totalContentWidth) / 2;
+ 
+            int textX = startX;
+            int textY = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+            int iconCenterX = startX + textWidth + gap + ICON_SIZE / 2;
             int centerY = getHeight() / 2;
-
-            if (shouldShowAura() && image != null) {
-                int auraCenterX = getWidth() / 2;
-                drawAura(g2, auraCenterX, centerY);
+ 
+            g2.setFont(getFont());
+            g2.setColor(getForeground());
+            g2.drawString(score, textX, textY);
+            
+            if (image != null) {
+                GameAssets.drawFit(g2, image, iconCenterX, centerY, ICON_SIZE);
             }
-
-            // Draw mini flower grid filling the component area
-            if (count > 0 && image != null) {
-                int gridW = Math.min(count, MINI_COLS) * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
-                int rows = Math.min(MINI_ROWS, (count + MINI_COLS - 1) / MINI_COLS);
-                int gridH = rows * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
-                int gridStartX = (getWidth() - gridW) / 2;
-                int gridStartY = (getHeight() - gridH) / 2;
-                int maxDisplay = MINI_COLS * MINI_ROWS;
-                int displayCount = Math.min(count, maxDisplay);
-
-                for (int i = 0; i < displayCount; i++) {
-                    int col = i % MINI_COLS;
-                    int row = i / MINI_COLS;
-                    int fx = gridStartX + col * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
-                    int fy = gridStartY + row * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
-                    GameAssets.drawFit(g2, image, fx, fy, MINI_FLOWER_SIZE);
-                }
-
-                // If more flowers than grid can show, draw count text
-                if (count > maxDisplay) {
-                    g2.setFont(getFont());
-                    g2.setColor(getForeground());
-                    String extra = "+" + (count - maxDisplay);
-                    FontMetrics fm = g2.getFontMetrics();
-                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 2,
-                            centerY + fm.getAscent() / 2 - 1);
-                }
-            } else {
-                // No flowers: just draw the flower icon faded
-                if (image != null) {
-                    java.awt.Composite old = g2.getComposite();
-                    g2.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.3f));
-                    GameAssets.drawFit(g2, image, getWidth() / 2, centerY, ICON_SIZE);
-                    g2.setComposite(old);
+ 
+            if (bonus > 0) {
+                long elapsed = System.currentTimeMillis() - bonusStartedAt;
+                if (elapsed < 2000) {
+                    float bAlpha = Math.max(0, 1f - elapsed / 2000f);
+                    float bOffset = elapsed / 50f;
+                    g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
+                    g2.setColor(new Color(100, 255, 150, Math.round(bAlpha * 255)));
+                    String msg = "+" + bonus;
+                    g2.drawString(msg, iconCenterX + ICON_SIZE / 2 + 2, centerY - Math.round(bOffset));
                 }
             }
-
+ 
             g2.dispose();
-        }
-
-        private void drawAura(Graphics2D g2, int centerX, int centerY) {
-            float intensity = 0.78f + auraPulse * 0.18f;
-            int pulseSize = Math.round(auraPulse * 2f);
-            drawAuraCircle(g2, centerX, centerY, 34 + pulseSize, Math.round(24 * intensity));
-            drawAuraCircle(g2, centerX, centerY, 28 + pulseSize, Math.round(34 * intensity));
-            drawAuraCircle(g2, centerX, centerY, 22 + pulseSize, Math.round(44 * intensity));
-        }
-
-        private void drawAuraCircle(Graphics2D g2, int centerX, int centerY, int size, int alpha) {
-            g2.setColor(new Color(aura.getRed(), aura.getGreen(), aura.getBlue(), alpha));
-            g2.fillOval(centerX - size / 2, centerY - size / 2, size, size);
         }
     }
 }

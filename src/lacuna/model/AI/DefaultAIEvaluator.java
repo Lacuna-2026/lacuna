@@ -1,7 +1,25 @@
 package lacuna.model.AI;
 
 public class DefaultAIEvaluator implements IAIEvaluator {
+ 
+    private static final int MAJORITY_BASE = 0;
+    private static final int DIFF_MULT = 30;
+    private static final int DIFF_BONUS = 10;
+    private static final int MAJORITY_WIN_THRESHOLD = 4;
+    private static final int MAJORITY_WIN_BASE = 50000;
+    private static final int MAJORITY_WIN_STEP = 5000;
+    private static final int MAJORITY_THREE_BONUS = 1000;
 
+    private static final int QUICK_MYCOUNT_GT3 = 100;
+    private static final int QUICK_MYCOUNT_EQ3 = 100;
+    private static final int QUICK_OPP_COUNT_GE3 = 0;
+    private static final int QUICK_FLOWER_WEIGHT = 20;
+
+    private static final double CF_WEIGHT_DEFAULT = 1.0;
+    private static final double CF_WEIGHT_LESS = 3.0;
+    private static final double CF_WEIGHT_EQUAL = 2.0;
+    private static final double CF_WEIGHT_MY_THREE = 2.5;
+    
     @Override
     public double evaluate(AIState state, int aiPlayer) {
         int opponent = 1 - aiPlayer;
@@ -35,19 +53,19 @@ public class DefaultAIEvaluator implements IAIEvaluator {
 
             if (finalAI[c] > finalOpp[c]) {
                 majAI++;
-                score += 200 + diff * 30;
+                score += MAJORITY_BASE + diff * DIFF_MULT;
             } else if (finalOpp[c] > finalAI[c]) {
                 majOpp++;
-                score -= 200 + (-diff) * 30;
+                score -= MAJORITY_BASE + (-diff) * DIFF_MULT;
             }
-            score += diff * 10;
+            score += diff * DIFF_BONUS;
         }
 
-        if (majAI >= 4) score += 50000 + (majAI - 3) * 5000;
-        if (majOpp >= 4) score -= 50000 - (majOpp - 3) * 5000;
+        if (majAI >= MAJORITY_WIN_THRESHOLD) score += MAJORITY_WIN_BASE + (majAI - (MAJORITY_WIN_THRESHOLD - 1)) * MAJORITY_WIN_STEP;
+        if (majOpp >= MAJORITY_WIN_THRESHOLD) score -= MAJORITY_WIN_BASE - (majOpp - (MAJORITY_WIN_THRESHOLD - 1)) * MAJORITY_WIN_STEP;
 
-        if (majAI == 3) score += 1000;
-        if (majOpp == 3) score -= 1000;
+        if (majAI == (MAJORITY_WIN_THRESHOLD - 1)) score += MAJORITY_THREE_BONUS;
+        if (majOpp == (MAJORITY_WIN_THRESHOLD - 1)) score -= MAJORITY_THREE_BONUS;
 
         return score;
     }
@@ -65,12 +83,12 @@ public class DefaultAIEvaluator implements IAIEvaluator {
         myCount += 2;
 
         double score = 0;
-        if (myCount > 3) score += 500;
-        else if (myCount == 3) score += 200;
-        if (oppCount >= 3) score += 300;
+        if (myCount > 3) score += QUICK_MYCOUNT_GT3;
+        else if (myCount == 3) score += QUICK_MYCOUNT_EQ3;
+        if (oppCount >= 3) score += QUICK_OPP_COUNT_GE3;
 
         score += countFlowersWon(state, move.pawnX, move.pawnY,
-                move.flower1Index, move.flower2Index) * 50;
+            move.flower1Index, move.flower2Index) * QUICK_FLOWER_WEIGHT;
 
         return (player == aiPlayer) ? score : -score;
     }
@@ -111,10 +129,10 @@ public class DefaultAIEvaluator implements IAIEvaluator {
 
             if (newPawnDistSq < minExistingDistSq) {
                 int c = f.color.ordinal();
-                double weight = 1.0;
-                if (myCount[c] < oppCount[c]) weight = 3.0;
-                else if (myCount[c] == oppCount[c]) weight = 2.0;
-                else if (myCount[c] == 3) weight = 2.5;
+                double weight = CF_WEIGHT_DEFAULT;
+                if (myCount[c] < oppCount[c]) weight = CF_WEIGHT_LESS;
+                else if (myCount[c] == oppCount[c]) weight = CF_WEIGHT_EQUAL;
+                else if (myCount[c] == (MAJORITY_WIN_THRESHOLD - 1)) weight = CF_WEIGHT_MY_THREE;
                 score += weight;
             }
         }

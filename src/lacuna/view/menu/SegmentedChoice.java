@@ -31,8 +31,28 @@ final class SegmentedChoice extends JComponent {
         return labels[selectedIndex];
     }
 
+    void selectValue(String value) {
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i].equals(value)) {
+                if (selectedIndex != i) {
+                    selectedIndex = i;
+                    repaint();
+                    fireActionEvent();
+                }
+                return;
+            }
+        }
+    }
+
     void addActionListener(ActionListener listener) {
         listeners.add(listener);
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        setCursor(enabled ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+        repaint();
     }
 
     private void selectByPosition(int x) {

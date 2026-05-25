@@ -33,7 +33,15 @@ public class Player {
 
     public int getPawnsPlaced() { return pawnsPlaced; }
     public void incrementPawnsPlaced() { pawnsPlaced++; }
+    public void decrementPawnsPlaced() { if (pawnsPlaced > 0) pawnsPlaced--; }
     public boolean hasFinishedPlacing() { return pawnsPlaced >= GameModel.PAWNS_PER_PLAYER; }
+
+    public void uncaptureFlower(Flower f) {
+        capturedFlowers.remove(f);
+        if (f.getOwner() == this) {
+            f.setOwner(null);
+        }
+    }
 
     public int getScoreForColor(FlowerColor color) {
         int count = 0;

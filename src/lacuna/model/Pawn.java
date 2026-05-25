@@ -20,6 +20,12 @@ public class Pawn {
         this.y = y;
         this.placed = true;
     }
+
+    public void unplace() {
+        this.x = 0;
+        this.y = 0;
+        this.placed = false;
+    }
     
     public double distanceTo(Flower f) {
         return f.distanceTo(this.x, this.y);

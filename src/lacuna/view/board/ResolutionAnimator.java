@@ -9,22 +9,20 @@ import javax.swing.JComponent;
 import javax.swing.Timer;
 import java.awt.Color;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public final class ResolutionAnimator {
-    private static final int STEP_MS = 360;
-    private static final int CAPTURE_MS = 220;
+    private static final int PHASE_MS = 3000;
+    private static final int CAPTURE_START_MS = 600;
     private static final int TICK_MS = 25;
 
     private final GameModel model;
     private final BoardGeometry geometry;
     private final JComponent component;
-    private List<ResolutionStep> steps = List.of();
+    private List<ResolutionPhase> phases = List.of();
     private Timer timer;
-    private int stepIndex;
-    private long stepStartedAt;
+    private int phaseIndex;
+    private long phaseStartedAt;
     private Runnable onFinished;
 
     public ResolutionAnimator(GameModel model, BoardGeometry geometry, JComponent component) {
@@ -35,18 +33,18 @@ public final class ResolutionAnimator {
 
     public void prepare() {
         stop();
-        stepIndex = 0;
-        steps = buildSteps();
+        phaseIndex = 0;
+        phases = buildPhases();
     }
 
     public boolean hasSteps() {
-        return !steps.isEmpty();
+        return !phases.isEmpty();
     }
 
     public void start(Runnable onFinished) {
         stopTimer();
         this.onFinished = onFinished;
-        stepStartedAt = System.currentTimeMillis();
+        phaseStartedAt = System.currentTimeMillis();
         timer = new Timer(TICK_MS, e -> tick());
         timer.setCoalesce(true);
         timer.start();
@@ -55,8 +53,8 @@ public final class ResolutionAnimator {
 
     public void clear() {
         stop();
-        steps = List.of();
-        stepIndex = 0;
+        phases = List.of();
+        phaseIndex = 0;
     }
 
     public void stop() {
@@ -64,44 +62,46 @@ public final class ResolutionAnimator {
         onFinished = null;
     }
 
-    public ResolutionStep currentStep() {
-        if (stepIndex < 0 || stepIndex >= steps.size()) {
+    public ResolutionPhase currentPhase() {
+        if (phaseIndex < 0 || phaseIndex >= phases.size()) {
             return null;
         }
-        return steps.get(stepIndex);
+        return phases.get(phaseIndex);
     }
 
     public float progress() {
-        long elapsed = System.currentTimeMillis() - stepStartedAt;
-        return Math.max(0f, Math.min(1f, elapsed / (float) STEP_MS));
+        long elapsed = System.currentTimeMillis() - phaseStartedAt;
+        return Math.max(0f, Math.min(1f, elapsed / (float) PHASE_MS));
     }
 
     public float vanishProgress() {
-        long elapsed = System.currentTimeMillis() - stepStartedAt;
-        return Math.max(0f, Math.min(1f, (elapsed - CAPTURE_MS) / (float) (STEP_MS - CAPTURE_MS)));
+        long elapsed = System.currentTimeMillis() - phaseStartedAt;
+        return Math.max(0f, Math.min(1f, (elapsed - CAPTURE_START_MS) / (float) (PHASE_MS - CAPTURE_START_MS)));
     }
 
     private void tick() {
         long now = System.currentTimeMillis();
-        ResolutionStep step = currentStep();
-        if (step == null) {
+        ResolutionPhase phase = currentPhase();
+        if (phase == null) {
             finish();
             return;
         }
 
-        long elapsed = now - stepStartedAt;
-        if (!step.captured() && elapsed >= CAPTURE_MS) {
-            step.capture();
-            model.capturerFleurResolution(step.flower(), step.pawn());
+        long elapsed = now - phaseStartedAt;
+        if (!phase.isCaptured() && elapsed >= CAPTURE_START_MS) {
+            phase.setCaptured(true);
+            for (ResolutionStep step : phase.steps()) {
+                model.capturerFleurResolution(step.flower(), step.pawn());
+            }
         }
 
-        if (elapsed >= STEP_MS) {
-            stepIndex++;
-            if (stepIndex >= steps.size()) {
+        if (elapsed >= PHASE_MS) {
+            phaseIndex++;
+            if (phaseIndex >= phases.size()) {
                 finish();
                 return;
             }
-            stepStartedAt = now;
+            phaseStartedAt = now;
         }
 
         component.repaint();
@@ -116,48 +116,44 @@ public final class ResolutionAnimator {
         }
     }
 
-    private List<ResolutionStep> buildSteps() {
-        Map<Pawn, List<Flower>> flowersByPawn = new LinkedHashMap<>();
-        for (Player player : model.getJoueurs()) {
+    private List<ResolutionPhase> buildPhases() {
+        List<ResolutionPhase> result = new ArrayList<>();
+        Player[] players = model.getJoueurs();
+
+        for (Player player : players) {
+            List<ResolutionStep> steps = new ArrayList<>();
+            List<Pawn> activePawns = new ArrayList<>();
+
             for (Pawn pawn : player.getPawns()) {
                 if (pawn.isPlaced()) {
-                    flowersByPawn.put(pawn, new ArrayList<>());
+                    activePawns.add(pawn);
                 }
             }
-        }
 
-        for (Flower flower : model.getFleurs()) {
-            if (!flower.isOnBoard()) {
-                continue;
+            if (activePawns.isEmpty()) continue;
+
+            for (Flower flower : model.getFleurs()) {
+                if (!flower.isOnBoard()) continue;
+
+                Pawn closest = model.trouverPionPlusProche(flower);
+                if (closest != null && closest.getOwner() == player) {
+                    steps.add(new ResolutionStep(
+                        flower, closest,
+                        geometry.toScreenX(flower.getX()),
+                        geometry.toScreenY(flower.getY()),
+                        geometry.toScreenX(closest.getX()),
+                        geometry.toScreenY(closest.getY()) - geometry.pawnSize() / 8
+                    ));
+                }
             }
 
-            Pawn closestPawn = model.trouverPionPlusProche(flower);
-            if (closestPawn != null) {
-                flowersByPawn.computeIfAbsent(closestPawn, ignored -> new ArrayList<>()).add(flower);
+            if (!steps.isEmpty()) {
+                Color color = BoardColors.playerGlow(activePawns.get(0));
+                result.add(new ResolutionPhase(player, activePawns, steps, color));
             }
         }
 
-        List<ResolutionStep> builtSteps = new ArrayList<>();
-        for (Map.Entry<Pawn, List<Flower>> entry : flowersByPawn.entrySet()) {
-            Pawn pawn = entry.getKey();
-            List<Flower> flowers = entry.getValue();
-            flowers.sort((left, right) -> Double.compare(pawn.distanceTo(left), pawn.distanceTo(right)));
-
-            for (Flower flower : flowers) {
-                int pawnX = geometry.toScreenX(pawn.getX());
-                int pawnY = geometry.toScreenY(pawn.getY()) - geometry.pawnSize() / 8;
-                builtSteps.add(new ResolutionStep(
-                    flower,
-                    pawn,
-                    geometry.toScreenX(flower.getX()),
-                    geometry.toScreenY(flower.getY()),
-                    pawnX,
-                    pawnY,
-                    BoardColors.playerGlow(pawn)
-                ));
-            }
-        }
-        return builtSteps;
+        return result;
     }
 
     private void stopTimer() {
@@ -167,60 +163,47 @@ public final class ResolutionAnimator {
         }
     }
 
+
     public static final class ResolutionStep {
         private final Flower flower;
         private final Pawn pawn;
-        private final int flowerX;
-        private final int flowerY;
-        private final int pawnX;
-        private final int pawnY;
+        private final int flowerX, flowerY;
+        private final int pawnX, pawnY;
+
+        public ResolutionStep(Flower flower, Pawn pawn, int fx, int fy, int px, int py) {
+            this.flower = flower;
+            this.pawn = pawn;
+            this.flowerX = fx; this.flowerY = fy;
+            this.pawnX = px; this.pawnY = py;
+        }
+
+        public Flower flower() { return flower; }
+        public Pawn pawn() { return pawn; }
+        public int flowerX() { return flowerX; }
+        public int flowerY() { return flowerY; }
+        public int pawnX() { return pawnX; }
+        public int pawnY() { return pawnY; }
+    }
+
+    public static final class ResolutionPhase {
+        private final Player player;
+        private final List<Pawn> pawns;
+        private final List<ResolutionStep> steps;
         private final Color color;
         private boolean captured;
 
-        private ResolutionStep(Flower flower, Pawn pawn, int flowerX, int flowerY, int pawnX, int pawnY, Color color) {
-            this.flower = flower;
-            this.pawn = pawn;
-            this.flowerX = flowerX;
-            this.flowerY = flowerY;
-            this.pawnX = pawnX;
-            this.pawnY = pawnY;
+        public ResolutionPhase(Player player, List<Pawn> pawns, List<ResolutionStep> steps, Color color) {
+            this.player = player;
+            this.pawns = pawns;
+            this.steps = steps;
             this.color = color;
         }
 
-        public Flower flower() {
-            return flower;
-        }
-
-        public Pawn pawn() {
-            return pawn;
-        }
-
-        public int flowerX() {
-            return flowerX;
-        }
-
-        public int flowerY() {
-            return flowerY;
-        }
-
-        public int pawnX() {
-            return pawnX;
-        }
-
-        public int pawnY() {
-            return pawnY;
-        }
-
-        public Color color() {
-            return color;
-        }
-
-        public boolean captured() {
-            return captured;
-        }
-
-        private void capture() {
-            captured = true;
-        }
+        public Player player() { return player; }
+        public List<Pawn> pawns() { return pawns; }
+        public List<ResolutionStep> steps() { return steps; }
+        public Color color() { return color; }
+        public boolean isCaptured() { return captured; }
+        public void setCaptured(boolean v) { captured = v; }
     }
 }

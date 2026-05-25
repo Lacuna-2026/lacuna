@@ -1,6 +1,10 @@
-Les diffucultés rencontrés:
+﻿Les difficultes rencontres:
 
-- Comment modéliser le tapis et les fleurs
-- pour que le jeu soit plus amusant à jouer, il faut avoir les images des fleurs et des pions et du tapis
-- Comment gérer les différents tours et phases
-- Comment gérer les fleurs capturées
+- Comment modeliser le tapis et les fleurs
+- pour que le jeu soit plus amusant a jouer, il faut avoir les images des fleurs et des pions et du tapis
+- Comment gerer les differents tours et phases
+- Comment gerer les fleurs capturees
+
+
+Deuxième phase de jue (Diagramme de Voronoï):
+implémenté via une approche Nearest-Neighbor par pixel

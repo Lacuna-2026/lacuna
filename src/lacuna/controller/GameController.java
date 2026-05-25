@@ -3,9 +3,11 @@ package lacuna.controller;
 import lacuna.model.Flower;
 import lacuna.model.FlowerColor;
 import lacuna.model.GameModel;
+import lacuna.model.Pawn;
 import lacuna.model.Player;
 import lacuna.model.AI.AIMove;
 import lacuna.model.AI.Minimax;
+import lacuna.view.BoardPanel;
 import lacuna.view.GameResultDialog;
 import lacuna.view.MainFrame;
 
@@ -15,83 +17,265 @@ import java.util.List;
 import java.util.Map;
 
 public class GameController {
+    private static final int AI_THINK_DELAY_MS = 900;
+
     private final GameModel model;
     private final MainFrame mainFrame;
-    private final int aiDifficulty; // 0=disabled, 1=facile, 2=moyen, 3=difficile
-    private final int aiPlayerIndex; // l'IA joue toujours en tant que joueur 1
+    private final BoardPanel boardPanel;
+    private final int aiPlayerIndex;
+    private final int aiDepth;
+    private final lacuna.network.OnlineSessionConnection networkSession;
+    private final int localPlayerIndex;
+    private SwingWorker<Void, List<String>> networkWorker;
+    private boolean localWantsRematch = false;
+    private boolean opponentWantsRematch = false;
 
-    public GameController(GameModel model, MainFrame mainFrame, int aiDifficulty) {
+    private boolean aiThinking = false;
+    private Timer aiTimer;
+    private SwingWorker<AIMove, Void> aiWorker;
+
+    public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, int aiPlayerIndex, int aiDepth, lacuna.network.OnlineSessionConnection networkSession, int localPlayerIndex) {
         this.model = model;
         this.mainFrame = mainFrame;
-        this.aiDifficulty = aiDifficulty;
-        this.aiPlayerIndex = 1; // l'IA est le joueur 2
+        this.boardPanel = boardPanel;
+        this.aiPlayerIndex = aiPlayerIndex;
+        this.aiDepth = aiDepth;
+        this.networkSession = networkSession;
+        this.localPlayerIndex = localPlayerIndex;
+        
+        if (networkSession != null) {
+            startNetworkListener();
+        }
+    }
+
+    private void startNetworkListener() {
+        networkWorker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                while (!isCancelled()) {
+                    try {
+                        List<String> data = networkSession.receiveData();
+                        if (data != null && !data.isEmpty()) {
+                            publish(data);
+                        }
+                    } catch (java.io.IOException e) {
+                        if (!isCancelled()) {
+                            e.printStackTrace();
+                        }
+                        break;
+                    }
+                }
+                return null;
+            }
+
+            @Override
+            protected void process(List<List<String>> chunks) {
+                for (List<String> data : chunks) {
+                    if (data.size() == 1 && data.get(0).equals("REMATCH")) {
+                        opponentWantsRematch = true;
+                        if (localWantsRematch) {
+                            SwingUtilities.invokeLater(mainFrame::relancerPartie);
+                        }
+                    } else {
+                        traiterCoupReseau(data);
+                    }
+                }
+            }
+            
+            @Override
+            protected void done() {
+                if (localWantsRematch && !opponentWantsRematch) {
+                    JOptionPane.showMessageDialog(mainFrame, "L'adversaire a refuse la revanche ou a quitte la partie.", "Deconnexion", JOptionPane.WARNING_MESSAGE);
+                    mainFrame.retourMenuPrincipal();
+                } else if (model.getVainqueur() == null && model.getPhase() != GameModel.GamePhase.RESOLVING && !localWantsRematch) {
+                    JOptionPane.showMessageDialog(mainFrame, "L'adversaire a quitte la partie.", "Deconnexion", JOptionPane.WARNING_MESSAGE);
+                    mainFrame.retourMenuPrincipal();
+                }
+            }
+        };
+        networkWorker.execute();
+    }
+
+    private void traiterCoupReseau(List<String> data) {
+        if (data.size() < 4) return;
+        try {
+            int f1Index = Integer.parseInt(data.get(0));
+            int f2Index = Integer.parseInt(data.get(1));
+            double posX = Double.parseDouble(data.get(2));
+            double posY = Double.parseDouble(data.get(3));
+            
+            Flower f1 = model.getFleurs().get(f1Index);
+            Flower f2 = model.getFleurs().get(f2Index);
+            
+            Pawn pionLibre = null;
+            for (Pawn pw : model.getJoueurCourant().getPawns()) {
+                if (!pw.isPlaced()) { pionLibre = pw; break; }
+            }
+            final Pawn finalPionLibre = pionLibre;
+            
+            boardPanel.montrerIntentionIA(f1, f2, posX, posY, () -> {
+                boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
+                if (success && finalPionLibre != null) {
+                    boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
+                }
+            });
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean isAiMode() {
+        return aiPlayerIndex >= 0;
     }
 
     public boolean isAiTurn() {
-        return aiDifficulty > 0
-            && model.getPhase() == GameModel.GamePhase.PLACING
-            && model.getJoueurCourant().getIndex() == aiPlayerIndex;
+        return isAiMode() && model.getJoueurCourant().getIndex() == aiPlayerIndex;
+    }
+
+    public boolean isAiThinking() {
+        return aiThinking;
     }
 
     public boolean onPlacementValid(Flower f1, Flower f2, double posX, double posY) {
+        if (networkSession != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
+            return false;
+        }
+        
         boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
+        if (success && networkSession != null) {
+            int f1Index = model.getFleurs().indexOf(f1);
+            int f2Index = model.getFleurs().indexOf(f2);
+            List<String> data = new ArrayList<>();
+            data.add(String.valueOf(f1Index));
+            data.add(String.valueOf(f2Index));
+            data.add(String.valueOf(posX));
+            data.add(String.valueOf(posY));
+            networkSession.sendData(data);
+        }
         return success;
     }
 
     public void onPlacementAnimationFinished() {
         if (model.getPhase() == GameModel.GamePhase.RESOLVING) {
             mainFrame.jouerAnimationResolution(this::afficherResultat);
-        } else if (isAiTurn()) {
-            // C'est le tour de l'IA — lancer le calcul en arrière-plan
-            triggerAiMove();
+        } else if (model.getPhase() == GameModel.GamePhase.PLACING && isAiTurn()) {
+            schedulerCoupIA();
         }
     }
 
-    /**
-     * Lance le calcul du coup IA dans un thread séparé pour ne pas bloquer l'UI.
-     * Quand le coup est trouvé, il est appliqué sur le EDT (Swing thread).
-     */
-    private void triggerAiMove() {
-        int depth = switch (aiDifficulty) {
-            case 1 -> 2;  // Facile — instantané
-            case 2 -> 3;  // Moyen  — ~0.5s
-            case 3 -> 4;  // Difficile — ~1-2s
-            default -> 3;
-        };
+    public void declencherCoupIASiNecessaire() {
+        if (model.getPhase() == GameModel.GamePhase.PLACING && isAiTurn() && !aiThinking) {
+            schedulerCoupIA();
+        }
+    }
 
-        long timeLimit = switch (aiDifficulty) {
-            case 1 -> 500;
-            case 2 -> 1500;
-            case 3 -> 3000;
-            default -> 1500;
-        };
+    public void annulerCoup() {
+        if (networkSession != null) return;
+        if (model.getPhase() != GameModel.GamePhase.PLACING) return;
+        if (!model.peutAnnuler()) return;
 
-        new Thread(() -> {
-            Minimax ai = new Minimax(model, aiPlayerIndex, depth, timeLimit);
-            AIMove best = ai.findBestMove();
+        if (aiThinking) {
+            if (aiTimer != null) aiTimer.stop();
+            if (aiWorker != null) aiWorker.cancel(true);
+            aiThinking = false;
+        }
+        if (!model.peutAnnuler()) return;
 
-            SwingUtilities.invokeLater(() -> {
-                if (best == null || model.getPhase() != GameModel.GamePhase.PLACING) return;
+        model.annulerDernierCoup();
+        boardPanel.onUndoPerformed();
+        declencherCoupIASiNecessaire();
+    }
 
-                Flower f1 = model.getFleurs().get(best.flower1Index);
-                Flower f2 = model.getFleurs().get(best.flower2Index);
-                boolean ok = model.placerPionEtCapturer(f1, f2, best.pawnX, best.pawnY);
+    private void schedulerCoupIA() {
+        if (aiThinking) return;
+        aiThinking = true;
 
-                if (ok) {
-                    // Après le coup de l'IA, vérifier la phase
-                    if (model.getPhase() == GameModel.GamePhase.RESOLVING) {
-                        mainFrame.jouerAnimationResolution(this::afficherResultat);
+        aiTimer = new Timer(AI_THINK_DELAY_MS, e -> {
+            aiWorker = new SwingWorker<>() {
+                @Override
+                protected AIMove doInBackground() {
+                    if (aiDepth <= 1) {
+                        return choisirCoupSimple(false);
                     }
-                    // Si c'est encore le tour de l'IA (ne devrait pas arriver), re-trigger
-                    else if (isAiTurn()) {
-                        // Petit délai pour laisser le repaint se faire
-                        Timer delay = new Timer(300, e -> triggerAiMove());
-                        delay.setRepeats(false);
-                        delay.start();
+                    if (aiDepth == 2) {
+                        return choisirCoupSimple(true);
+                    }
+                    Minimax minimax = new Minimax(model, aiPlayerIndex, aiDepth, 2000);
+                    return minimax.findBestMove();
+                }
+
+                @Override
+                protected void done() {
+                    if (isCancelled()) return;
+                    aiThinking = false;
+                    try {
+                        AIMove move = get();
+                        if (move != null) {
+                            jouerCoupIA(move);
+                        }
+                    } catch (Exception ex) {
+                        if (!(ex instanceof java.util.concurrent.CancellationException)) {
+                            ex.printStackTrace();
+                        }
                     }
                 }
-            });
-        }, "AI-Thread").start();
+            };
+            aiWorker.execute();
+        });
+        aiTimer.setRepeats(false);
+        aiTimer.start();
+    }
+
+    private AIMove choisirCoupSimple(boolean greedy) {
+        lacuna.model.AI.AIState state = lacuna.model.AI.AIState.fromModel(model);
+        List<AIMove> moves = new lacuna.model.AI.DefaultAIMoveGenerator(true).generateMoves(state);
+        if (moves.isEmpty()) return null;
+
+        lacuna.model.AI.IAIEvaluator evaluator = new lacuna.model.AI.DefaultAIEvaluator();
+
+        if (!greedy) {
+            java.util.Collections.shuffle(moves);
+            for (AIMove move : moves) {
+                if (evaluator.quickEval(state, move, aiPlayerIndex) > 0) {
+                    return move;
+                }
+            }
+            return moves.get(0);
+        }
+
+        AIMove bestMove = moves.get(0);
+        double bestScore = evaluator.quickEval(state, bestMove, aiPlayerIndex);
+        for (int i = 1; i < moves.size(); i++) {
+            AIMove move = moves.get(i);
+            double score = evaluator.quickEval(state, move, aiPlayerIndex);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+        }
+        return bestMove;
+    }
+
+    private void jouerCoupIA(AIMove move) {
+        List<Flower> fleurs = model.getFleurs();
+        Flower f1 = fleurs.get(move.flower1Index);
+        Flower f2 = fleurs.get(move.flower2Index);
+
+        if (!model.estLigneValide(f1, f2)) return;
+
+        Pawn pionLibre = null;
+        for (Pawn pw : model.getJoueurCourant().getPawns()) {
+            if (!pw.isPlaced()) { pionLibre = pw; break; }
+        }
+        
+        final Pawn finalPionLibre = pionLibre;
+
+        boardPanel.montrerIntentionIA(f1, f2, move.pawnX, move.pawnY, () -> {
+            boolean success = model.placerPionEtCapturer(f1, f2, move.pawnX, move.pawnY);
+            if (success && finalPionLibre != null) {
+                boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
+            }
+        });
     }
 
     private void afficherResultat() {
@@ -116,7 +300,20 @@ public class GameController {
         );
 
         if (choix == GameResultDialog.Choice.REPLAY) {
-            SwingUtilities.invokeLater(mainFrame::relancerPartie);
+            if (networkSession != null) {
+                List<String> msg = new ArrayList<>();
+                msg.add("REMATCH");
+                networkSession.sendData(msg);
+                
+                localWantsRematch = true;
+                if (opponentWantsRematch) {
+                    SwingUtilities.invokeLater(mainFrame::relancerPartie);
+                } else {
+                    SwingUtilities.invokeLater(mainFrame::afficherAttenteRematch);
+                }
+            } else {
+                SwingUtilities.invokeLater(mainFrame::relancerPartie);
+            }
         } else {
             SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
         }

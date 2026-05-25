@@ -7,7 +7,7 @@ import javax.swing.JComponent;
 import javax.swing.Timer;
 
 public final class PlacementAnimator {
-    private static final int DURATION_MS = 320;
+    private static final int DURATION_MS = 650;
     private static final int TICK_MS = 25;
 
     private final JComponent component;
@@ -72,5 +72,12 @@ public final class PlacementAnimator {
     }
 
     public record PlacementAnimation(Pawn pawn, Flower firstFlower, Flower secondFlower) {
+    }
+
+    public double getFlowerRippleProgress() {
+        if (animation == null) return -1.0;
+        float prog = progress();
+        if (prog < 0.85f) return -1.0;
+        return (prog - 0.85f) / 0.15f;
     }
 }

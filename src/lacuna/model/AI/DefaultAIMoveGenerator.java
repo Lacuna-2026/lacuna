@@ -8,9 +8,15 @@ import lacuna.model.GameModel;
 public class DefaultAIMoveGenerator implements IAIMoveGenerator {
 
     private final double hitboxRadius;
+    private final boolean midpointOnly;
 
     public DefaultAIMoveGenerator() {
+        this(false);
+    }
+
+    public DefaultAIMoveGenerator(boolean midpointOnly) {
         this.hitboxRadius = GameModel.HITBOX_RADIUS;
+        this.midpointOnly = midpointOnly;
     }
 
     @Override
@@ -36,6 +42,10 @@ public class DefaultAIMoveGenerator implements IAIMoveGenerator {
     private double[] bestPawnPosition(AIState state, int idx1, int idx2) {
         AIFlower f1 = state.flowers[idx1];
         AIFlower f2 = state.flowers[idx2];
+
+        if (midpointOnly) {
+            return new double[] {(f1.x + f2.x) / 2.0, (f1.y + f2.y) / 2.0};
+        }
 
         double t = 0.5;
         double learningRate = 0.2;

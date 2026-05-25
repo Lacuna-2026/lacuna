@@ -9,8 +9,8 @@ public class GameModel {
     public static final int NUM_FLOWERS = NUM_COLORS * FLOWERS_PER_COLOR;
     public static final int PAWNS_PER_PLAYER = 6;
     
-    private static final double MAX_RADIUS_X = 0.82;
-    private static final double MAX_RADIUS_Y = 0.72;
+    private static final double MAX_RADIUS_X = 0.76;
+    private static final double MAX_RADIUS_Y = 0.88;
     public static final double HITBOX_RADIUS = 0.05;
 
     private final List<Flower> flowers;
@@ -19,6 +19,7 @@ public class GameModel {
     private GamePhase phase;
 
     private final List<ModelListener> listeners = new ArrayList<>();
+    private final java.util.Deque<MoveRecord> moveHistory = new java.util.ArrayDeque<>();
 
     public enum GamePhase {
         PLACING,
@@ -27,6 +28,10 @@ public class GameModel {
     }
 
     public GameModel(String name1, String name2) {
+        this(name1, name2, new Random().nextLong());
+    }
+
+    public GameModel(String name1, String name2, long seed) {
         flowers = new ArrayList<>(NUM_FLOWERS);
         players = new Player[]{
             new Player(name1, 0),
@@ -35,8 +40,10 @@ public class GameModel {
         currentPlayerIndex = 0;
         phase = GamePhase.PLACING;
 
-        genererFleursTapis();
+        Random rng = new Random(seed);
+        genererFleursTapis(rng);
         creerPions();
+        assignRandomStartingFlower(rng);
     }
 
     public void addModelListener(ModelListener l) { listeners.add(l); }
@@ -47,8 +54,7 @@ public class GameModel {
         }
     }
 
-    private void genererFleursTapis() {
-        Random rng = new Random();
+    private void genererFleursTapis(Random rng) {
         List<FlowerColor> poolCouleurs = new ArrayList<>(NUM_FLOWERS);
         for (FlowerColor c : FlowerColor.values()) {
             for (int i = 0; i < FLOWERS_PER_COLOR; i++) poolCouleurs.add(c);
@@ -86,6 +92,12 @@ public class GameModel {
         }
     }
 
+    private void assignRandomStartingFlower(Random rng) {
+        if (flowers.isEmpty()) return;
+        Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
+        players[0].captureFlower(startingFlower);
+    }
+
     public boolean estLigneValide(Flower f1, Flower f2) {
         if (f1 == f2) return false;
         if (f1.getColor() != f2.getColor()) return false;
@@ -119,6 +131,8 @@ public class GameModel {
         }
         if (pionLibre == null) return false;
 
+        moveHistory.push(new MoveRecord(courant, pionLibre, f1, f2));
+
         pionLibre.place(px, py);
         courant.incrementPawnsPlaced();
         courant.captureFlower(f1);
@@ -127,6 +141,24 @@ public class GameModel {
         avancerTour();
         notifyListeners();
         return true;
+    }
+
+    public boolean annulerDernierCoup() {
+        if (moveHistory.isEmpty() || phase != GamePhase.PLACING) return false;
+
+        MoveRecord move = moveHistory.pop();
+        move.player.uncaptureFlower(move.flower1);
+        move.player.uncaptureFlower(move.flower2);
+        move.pawn.unplace();
+        move.player.decrementPawnsPlaced();
+        currentPlayerIndex = move.player.getIndex();
+
+        notifyListeners();
+        return true;
+    }
+
+    public boolean peutAnnuler() {
+        return !moveHistory.isEmpty() && phase == GamePhase.PLACING;
     }
 
     private void avancerTour() {
@@ -199,7 +231,7 @@ public class GameModel {
             int scoreJ1 = players[0].getScoreForColor(c);
             int scoreJ2 = players[1].getScoreForColor(c);
             if (scoreJ1 > scoreJ2) resultats.put(c, 0);
-            else resultats.put(c, 1);
+            else if (scoreJ2 > scoreJ1) resultats.put(c, 1);
         }
         return resultats;
     }
@@ -221,4 +253,18 @@ public class GameModel {
     public Player[] getJoueurs() { return players; }
     public Player getJoueurCourant() { return players[currentPlayerIndex]; }
     public GamePhase getPhase() { return phase; }
+
+    private static final class MoveRecord {
+        final Player player;
+        final Pawn pawn;
+        final Flower flower1;
+        final Flower flower2;
+
+        MoveRecord(Player player, Pawn pawn, Flower flower1, Flower flower2) {
+            this.player = player;
+            this.pawn = pawn;
+            this.flower1 = flower1;
+            this.flower2 = flower2;
+        }
+    }
 }

@@ -8,8 +8,7 @@ import java.awt.*;
 
 final class TurnGlowPanel extends JPanel implements ModelListener {
     private static final int TIMER_DELAY_MS = 40;
-    private static final int GLOW_DEPTH = 210;
-    private static final int TOP_GLOW_DEPTH = 230;
+    private static final int SIDE_GLOW_WIDTH = 220;
     private static final int TRANSITION_MS = 650;
     private static final float BASE_ALPHA = 0.35f;
     private static final float BREATH_ALPHA = 0.22f;
@@ -107,7 +106,7 @@ final class TurnGlowPanel extends JPanel implements ModelListener {
         if (model.getPhase() != GameModel.GamePhase.PLACING) {
             return Side.NONE;
         }
-        return model.getJoueurCourant().getIndex() == 0 ? Side.TOP : Side.BOTTOM;
+        return model.getJoueurCourant().getIndex() == 0 ? Side.LEFT : Side.RIGHT;
     }
 
     private float breathingAlpha() {
@@ -126,36 +125,36 @@ final class TurnGlowPanel extends JPanel implements ModelListener {
     }
 
     private void paintSide(Graphics2D g2, Side side, float alpha) {
-        if (side == Side.TOP) {
-            paintTopGlow(g2, alpha);
-        } else if (side == Side.BOTTOM) {
-            paintBottomGlow(g2, alpha);
+        if (side == Side.LEFT) {
+            paintLeftGlow(g2, alpha);
+        } else if (side == Side.RIGHT) {
+            paintRightGlow(g2, alpha);
         }
     }
 
-    private void paintTopGlow(Graphics2D g2, float alpha) {
-        int depth = Math.min(TOP_GLOW_DEPTH, getHeight() / 2);
+    private void paintLeftGlow(Graphics2D g2, float alpha) {
+        int width = Math.min(SIDE_GLOW_WIDTH, getWidth() / 3);
 
         g2.setPaint(new LinearGradientPaint(
             0, 0,
-            0, depth,
-            new float[]{0f, 0.35f, 1f},
+            width, 0,
+            new float[]{0f, 0.45f, 1f},
             new Color[]{
                 withAlpha(TOP_GLOW, alpha),
-                withAlpha(TOP_GLOW, alpha * 0.60f),
+                withAlpha(TOP_GLOW, alpha * 0.55f),
                 withAlpha(TOP_GLOW, 0f)
             }
         ));
-        g2.fillRect(0, 0, getWidth(), depth);
+        g2.fillRect(0, 0, width, getHeight());
     }
 
-    private void paintBottomGlow(Graphics2D g2, float alpha) {
-        int depth = Math.min(GLOW_DEPTH, getHeight() / 2);
-        int top = getHeight() - depth;
+    private void paintRightGlow(Graphics2D g2, float alpha) {
+        int width = Math.min(SIDE_GLOW_WIDTH, getWidth() / 3);
+        int left = getWidth() - width;
 
         g2.setPaint(new LinearGradientPaint(
-            0, top,
-            0, getHeight(),
+            left, 0,
+            getWidth(), 0,
             new float[]{0f, 0.55f, 1f},
             new Color[]{
                 withAlpha(BOTTOM_GLOW, 0f),
@@ -163,7 +162,7 @@ final class TurnGlowPanel extends JPanel implements ModelListener {
                 withAlpha(BOTTOM_GLOW, alpha)
             }
         ));
-        g2.fillRect(0, top, getWidth(), depth);
+        g2.fillRect(left, 0, width, getHeight());
     }
 
     private Color withAlpha(Color color, float alpha) {
@@ -172,8 +171,8 @@ final class TurnGlowPanel extends JPanel implements ModelListener {
     }
 
     private enum Side {
-        TOP,
-        BOTTOM,
+        LEFT,
+        RIGHT,
         NONE
     }
 }
