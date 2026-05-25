@@ -152,6 +152,22 @@ Parameters like \texttt{quickOppCountGe3} and \texttt{quickMyCountGt3} dictate h
     \item \textbf{Effect:} Ensures that blocking an opponent's winning move or taking a winning move is evaluated first, drastically cutting down search time on useless branches.
 \end{itemize}
 
+\section{Difficulty Scaling and Calculation Speed}
+The AI in Lacuna offers four distinct difficulty levels, each employing a vastly different search strategy to balance challenge with calculation time. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{difficulty_speed.png}
+    \caption{Calculation time (log scale) for each AI difficulty level.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Difficulty 1 (Random Heuristic - Depth 1):} Calculates almost instantaneously ($< 1$ ms). It simply shuffles all valid moves and picks the first one that yields a positive \texttt{quickEval} score. It has no foresight and is meant for absolute beginners.
+    \item \textbf{Difficulty 2 (Greedy Search - Depth 2):} Still extremely fast ($< 5$ ms). It evaluates all immediate moves and greedily picks the one that yields the highest immediate score, but does not simulate the opponent's response.
+    \item \textbf{Difficulty 3 (Minimax - Depth 3):} Introduces the full Minimax algorithm with a depth of 3. Calculation time jumps to roughly $\sim 350$ ms as the AI simulates thousands of future board states, providing a solid challenge without breaking the flow of the game.
+    \item \textbf{Difficulty 4 (Minimax - Depth 4):} The maximum strength. It searches an order of magnitude more states ($O(b^4)$), pushing the calculation time up to $\sim 1850$ ms (bounded by the 2000 ms hard limit). This delay is noticeable to the player but necessary for the AI to execute complex, multi-turn strategies.
+\end{itemize}
+
 \section{Conclusion}
 The Lacuna AI has matured from a basic Minimax implementation into a highly modular, performant, and empirically tuned engine. The inclusion of the Transposition Table and Quick Evaluation ensures that alpha-beta pruning is as efficient as possible. Furthermore, the choice of Gradient Descent over heavy geometric calculations ensures pawn placement optimization takes virtually zero time. Combined with self-play tuning, the Lacuna AI makes demonstrably stronger, more precise strategic decisions.
 
