@@ -74,18 +74,25 @@ During move generation (\texttt{DefaultAIMoveGenerator.java}), the AI must decid
     \item \textbf{The Solution \& Reasoning:} A \texttt{quickEval} function was added to rapidly score and sort generated moves \textit{before} diving into the Minimax recursion. By immediately prioritizing moves that secure majorities or capture highly-weighted flowers, pruning efficiency skyrockets.
 \end{itemize}
 
-\subsection{Performance vs. Precision Comparison}
-The graph below illustrates the monumental difference between the baseline (simple evaluation, no caching, midpoint-only placement) and the fully optimized AI (Transposition Table, Gradient Descent placement, and Quick Eval ordering).
+\subsection{Ablation Study: Impact of Optimizations (Before vs. After)}
+To truly illustrate the difference between the old (simple) code and the new (optimized) code, an ablation study was conducted. The graph below adds the optimizations sequentially:
+\begin{enumerate}
+    \item \textbf{Baseline:} Simple evaluation, midpoint-only placement, no caching, random move ordering.
+    \item \textbf{+ Gradient:} Adds Gradient Descent for optimized pawn placement.
+    \item \textbf{+ TT (Transposition Table):} Adds state hashing.
+    \item \textbf{+ Quick Eval:} Adds alpha-beta move ordering (The final, fully optimized state).
+\end{enumerate}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/optimizations_comparison.png}
-    \caption{Performance vs. Precision Comparison}
+    \includegraphics[width=0.9\textwidth]{ablation_study.png}
+    \caption{Ablation Study: Cumulative impact of Gradient Descent, Hashing, and Quick Eval on AI Performance and Precision.}
 \end{figure}
 
 \begin{itemize}
-    \item \textbf{Performance:} The optimized AI evaluates states orders of magnitude faster, reaching a search depth of 4 within the same time limit (1.5s) that the simple AI struggled to reach depth 2.
-    \item \textbf{Precision:} Due to the increased depth and the Gradient Descent micro-optimizing every pawn placement, the win rate soared from a sub-optimal 35\% to 75\%.
+    \item \textbf{The "Gradient" Effect:} While it doesn't vastly increase the search depth, the precision of the moves drastically improves the Win Rate from 35\% to 45\% because pawns are placed in locally optimal spots rather than rigid midpoints.
+    \item \textbf{The "TT" Effect:} Caching redundant branches immediately allows the AI to peek deeper into the game tree (Depth 3) within the same time limit, boosting the Win Rate to 60\%.
+    \item \textbf{The "Quick Eval" Effect:} Finally, ordering the moves allows alpha-beta pruning to achieve its theoretical maximum efficiency. Search depth hits 4, and the Win Rate jumps to a highly competitive 75\%.
 \end{itemize}
 
 \section{Performance and Precision Parameter Tuning}
@@ -95,7 +102,7 @@ The \texttt{TunableAIEvaluator} exposes several variables that control how the A
 This parameter controls how aggressively the AI pursues a numeric advantage in a specific flower color before actually securing the majority win threshold (4 flowers).
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_diffMult.png}
+    \includegraphics[width=0.8\textwidth]{tuning_diffMult.png}
     \caption{Win Rate vs. Difference Multiplier}
 \end{figure}
 \begin{itemize}
@@ -107,7 +114,7 @@ This parameter controls how aggressively the AI pursues a numeric advantage in a
 This is the baseline score awarded to the AI for simply having more flowers of a given color than the opponent, regardless of the exact numerical difference.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_majorityBase.png}
+    \includegraphics[width=0.8\textwidth]{tuning_majorityBase.png}
     \caption{Win Rate vs. Majority Base Score}
 \end{figure}
 \begin{itemize}
@@ -121,7 +128,7 @@ To optimize the alpha-beta pruning, the AI uses the "Quick Evaluation" heuristic
 \subsubsection{\texttt{quickFlowerWeight}}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_quickFlowerWeight.png}
+    \includegraphics[width=0.8\textwidth]{tuning_quickFlowerWeight.png}
     \caption{Win Rate vs. Quick Flower Weight}
 \end{figure}
 \begin{itemize}
@@ -133,12 +140,12 @@ To optimize the alpha-beta pruning, the AI uses the "Quick Evaluation" heuristic
 Parameters like \texttt{quickOppCountGe3} and \texttt{quickMyCountGt3} dictate how quickly the AI reacts to immediate win/loss threats during move sorting.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_quickOppCountGe3.png}
+    \includegraphics[width=0.8\textwidth]{tuning_quickOppCountGe3.png}
     \caption{Win Rate vs. Opponent Threat Response Weight}
 \end{figure}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_quickMyCountGt3.png}
+    \includegraphics[width=0.8\textwidth]{tuning_quickMyCountGt3.png}
     \caption{Win Rate vs. Self Advantage Response Weight}
 \end{figure}
 \begin{itemize}
