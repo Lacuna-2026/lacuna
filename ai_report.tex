@@ -1,0 +1,151 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+\title{\textbf{Lacuna AI Evolution \& Performance Report}}
+\author{Lacuna Development Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+This report documents the evolution of the Lacuna AI from its initial implementation to its current state. It details the architectural changes, code modifications, the reasoning behind various calculation strategies, and the parameter tuning process that has optimized the AI's performance and precision.
+
+\section{Architectural Evolution and Git History}
+The development of the AI in Lacuna followed a structured path across three major commits:
+
+\subsection{Commit 1: Core Algorithm (\texttt{01beffb})}
+\textbf{Commit Message:} "modele IA: Minimax alpha-beta, etats de jeu et evaluation"
+\begin{itemize}
+    \item \textbf{Changes:} Introduced the foundational classes for the AI, including \texttt{Minimax.java}, \texttt{AIState.java}, \texttt{AIMove.java}, \texttt{AIPawn.java}, and \texttt{AIFlower.java}.
+    \item \textbf{Reasoning:} The first goal was to get a working implementation of the Minimax algorithm with alpha-beta pruning. The game state was decoupled from the main MVC \texttt{GameModel} into specialized, lightweight structures to allow the Minimax algorithm to simulate thousands of moves per second without affecting the actual game state or triggering UI updates.
+\end{itemize}
+
+\subsection{Commit 2: Modularity and Optimization (\texttt{b4d42cb})}
+\textbf{Commit Message:} "Add Minimax AI implementation"
+\begin{itemize}
+    \item \textbf{Changes:}
+    \begin{itemize}
+        \item Extracted evaluation and move generation logic into interfaces (\texttt{IAIEvaluator}, \texttt{IAIMoveGenerator}).
+        \item Created default implementations (\texttt{DefaultAIEvaluator}, \texttt{DefaultAIMoveGenerator}).
+        \item Added \texttt{TranspositionTable.java}.
+    \end{itemize}
+    \item \textbf{Reasoning:} The Strategy pattern was used to allow swapping heuristics easily. The Transposition Table was added to introduce performance caching for previously evaluated board states.
+\end{itemize}
+
+\subsection{Commit 3: Parameter Tuning Framework (\texttt{8bbe586})}
+\textbf{Commit Message:} "Ia moyen sans minmax et ajustement des var"
+\begin{itemize}
+    \item \textbf{Changes:} Added \texttt{TunableAIEvaluator.java}, \texttt{MultiParamSweepRunner.java}, and a suite of CSV/PNG statistics.
+    \item \textbf{Reasoning:} Enabled empirical tuning of evaluation weights via self-play instead of hardcoding subjective heuristics, vastly improving precision.
+\end{itemize}
+
+\section{Algorithmic Optimizations \& Calculation Strategies}
+The initial iteration of the AI was conceptually simple but lacked the raw speed required to explore the game tree deeply. To drastically improve both \textbf{Performance} (Search Depth \& Nodes/sec) and \textbf{Precision} (Win Rate \& Move Quality), several advanced calculating strategies were implemented.
+
+\subsection{Gradient Descent vs. Line Splitting / Voronoi Calculation}
+During move generation (\texttt{DefaultAIMoveGenerator.java}), the AI must decide exactly \textit{where} to place a pawn on the continuous line between two flowers.
+\begin{itemize}
+    \item \textbf{The Problem:} The game board is continuous. To find the optimal placement that captures the most surrounding flowers, one approach is to split the line into hundreds of segments and test each one, or to generate a Voronoi diagram for the entire board to calculate area dominance.
+    \item \textbf{The Solution:} The AI uses a 1-Dimensional \textbf{Numeric Gradient Descent}. By calculating a continuous numeric score for a position (\texttt{evaluateT}) and taking the derivative via $(scorePlus - scoreMinus) / (2 * \epsilon)$, the AI iteratively steps towards the local maximum (the best spot on the line).
+    \item \textbf{The Reasoning:} \textbf{Performance.} Generating Voronoi diagrams ($O(N \log N)$) or testing 100 splits per line segment takes immense computational power per board state. Because the Minimax explores thousands of states per second, this overhead is fatal. Gradient descent finds the optimal placement in a maximum of just 8 iterations, saving CPU time and allowing the AI to evaluate far more board states deeper into the game tree.
+\end{itemize}
+
+\subsection{Hashing (Transposition Table)}
+\begin{itemize}
+    \item \textbf{The Problem:} In Lacuna, different sequences of moves can result in the exact same board state. A naive Minimax recalculates the entire sub-tree for both sequences redundantly.
+    \item \textbf{The Solution \& Reasoning:} We implemented a \texttt{TranspositionTable} that hashes board states. When the AI encounters a state it has seen before, it instantly retrieves the previously calculated evaluation. This drastically prunes redundant branches, increasing the effective search depth exponentially.
+\end{itemize}
+
+\subsection{Quick Eval (Alpha-Beta Move Ordering)}
+\begin{itemize}
+    \item \textbf{The Problem:} Alpha-Beta pruning is most effective when it explores the \textit{best} moves first. If it explores the worst moves first, almost no branches are pruned.
+    \item \textbf{The Solution \& Reasoning:} A \texttt{quickEval} function was added to rapidly score and sort generated moves \textit{before} diving into the Minimax recursion. By immediately prioritizing moves that secure majorities or capture highly-weighted flowers, pruning efficiency skyrockets.
+\end{itemize}
+
+\subsection{Performance vs. Precision Comparison}
+The graph below illustrates the monumental difference between the baseline (simple evaluation, no caching, midpoint-only placement) and the fully optimized AI (Transposition Table, Gradient Descent placement, and Quick Eval ordering).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/optimizations_comparison.png}
+    \caption{Performance vs. Precision Comparison}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Performance:} The optimized AI evaluates states orders of magnitude faster, reaching a search depth of 4 within the same time limit (1.5s) that the simple AI struggled to reach depth 2.
+    \item \textbf{Precision:} Due to the increased depth and the Gradient Descent micro-optimizing every pawn placement, the win rate soared from a sub-optimal 35\% to 75\%.
+\end{itemize}
+
+\section{Performance and Precision Parameter Tuning}
+The \texttt{TunableAIEvaluator} exposes several variables that control how the AI values different board states. By sweeping through potential values and charting the AI's win rate, we identified the optimal configurations.
+
+\subsection{\texttt{diffMult} (Difference Multiplier)}
+This parameter controls how aggressively the AI pursues a numeric advantage in a specific flower color before actually securing the majority win threshold (4 flowers).
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_diffMult.png}
+    \caption{Win Rate vs. Difference Multiplier}
+\end{figure}
+\begin{itemize}
+    \item \textbf{Effect:} A higher \texttt{diffMult} makes the AI prioritize widening the gap between its flower count and the opponent's flower count.
+    \item \textbf{Results:} The data shows a peak win rate (70\%) around a multiplier of \textbf{30}. If it's too low, the AI ignores incremental advantages; if it's too high, it tunnel-visions on a single color and ignores broader strategic plays.
+\end{itemize}
+
+\subsection{\texttt{majorityBase} (Majority Base Score)}
+This is the baseline score awarded to the AI for simply having more flowers of a given color than the opponent, regardless of the exact numerical difference.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_majorityBase.png}
+    \caption{Win Rate vs. Majority Base Score}
+\end{figure}
+\begin{itemize}
+    \item \textbf{Effect:} It encourages the AI to spread its influence across multiple colors rather than just focusing on one.
+    \item \textbf{Results:} The sweep shows a volatile but generally upward trend, peaking at a win rate of 75\% when \texttt{majorityBase} = 1100. This suggests that strongly valuing the \textit{status} of having the majority is crucial.
+\end{itemize}
+
+\subsection{Quick Evaluation Parameters}
+To optimize the alpha-beta pruning, the AI uses the "Quick Evaluation" heuristic to sort moves.
+
+\subsubsection{\texttt{quickFlowerWeight}}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_quickFlowerWeight.png}
+    \caption{Win Rate vs. Quick Flower Weight}
+\end{figure}
+\begin{itemize}
+    \item \textbf{Effect:} Determines how heavily the initial move sorting weighs the raw number of flowers captured by a move.
+    \item \textbf{Results:} A weight of \textbf{90} yielded a peak win rate of 65\%. 
+\end{itemize}
+
+\subsubsection{Threat Detection}
+Parameters like \texttt{quickOppCountGe3} and \texttt{quickMyCountGt3} dictate how quickly the AI reacts to immediate win/loss threats during move sorting.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_quickOppCountGe3.png}
+    \caption{Win Rate vs. Opponent Threat Response Weight}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{src/lacuna/model/AI/stats/tuning_quickMyCountGt3.png}
+    \caption{Win Rate vs. Self Advantage Response Weight}
+\end{figure}
+\begin{itemize}
+    \item \textbf{Effect:} Ensures that blocking an opponent's winning move or taking a winning move is evaluated first, drastically cutting down search time on useless branches.
+\end{itemize}
+
+\section{Conclusion}
+The Lacuna AI has matured from a basic Minimax implementation into a highly modular, performant, and empirically tuned engine. The inclusion of the Transposition Table and Quick Evaluation ensures that alpha-beta pruning is as efficient as possible. Furthermore, the choice of Gradient Descent over heavy geometric calculations ensures pawn placement optimization takes virtually zero time. Combined with self-play tuning, the Lacuna AI makes demonstrably stronger, more precise strategic decisions.
+
+\end{document}
