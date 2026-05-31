@@ -228,7 +228,7 @@ public class MainMenuPanel extends JPanel {
         playButton.addActionListener((ActionEvent e) -> {
             String nom1 = valueOrDefault(playerOne.getText(), "Joueur 1");
             String nom2 = valueOrDefault(playerTwo.getText(), "Joueur 2");
-            onLocalPlay.accept(nom1, nom2);
+            onPlay.start(nom1, nom2, 0);
         });
 
         refreshFields();
