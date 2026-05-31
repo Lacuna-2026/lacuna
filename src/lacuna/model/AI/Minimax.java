@@ -16,6 +16,10 @@ public class Minimax {
     private final IAIEvaluator evaluator;
     private final IAIMoveGenerator moveGenerator;
     private final TranspositionTable tt;
+    
+    public static long nodesEvaluated = 0;
+    public static boolean useTT = true;
+    public static boolean useQuickEval = true;
 
     public Minimax(GameModel model, int aiPlayer, int baseDepth) {
         this(model, aiPlayer, baseDepth, 3000);
@@ -39,7 +43,7 @@ public class Minimax {
     public AIMove findBestMove() {
         searchStartTime = System.currentTimeMillis();
         timeOut = false;
-        tt.clear();
+        if(useTT) tt.clear();
 
         List<AIMove> moves = moveGenerator.generateMoves(rootState);
         if (moves.isEmpty())
@@ -53,8 +57,10 @@ public class Minimax {
         else if (moves.size() <= 15)
             depth = baseDepth + 1;
 
-        moves.sort((a, b) -> Double.compare(
-                quickEval(rootState, b), quickEval(rootState, a)));
+        if(useQuickEval) {
+            moves.sort((a, b) -> Double.compare(
+                    quickEval(rootState, b), quickEval(rootState, a)));
+        }
 
         AIMove bestMove = moves.get(0);
         double bestScore = Double.NEGATIVE_INFINITY;
@@ -88,35 +94,43 @@ public class Minimax {
 
     private double minimax(AIState state, int depth, double alpha, double beta,
             boolean maximizing) {
+        nodesEvaluated++;
+        
         if (isTimeOut())
             return evaluator.evaluate(state, aiPlayer);
 
-        long hash = state.computeHash();
-        TranspositionTable.TTEntry entry = tt.get(hash);
-        if (entry != null && entry.depth >= depth) {
-            if (entry.type == TranspositionTable.NodeType.EXACT) {
-                return entry.score;
-            } else if (entry.type == TranspositionTable.NodeType.LOWERBOUND) {
-                alpha = Math.max(alpha, entry.score);
-            } else if (entry.type == TranspositionTable.NodeType.UPPERBOUND) {
-                beta = Math.min(beta, entry.score);
-            }
-            if (alpha >= beta) {
-                return entry.score;
+        long hash = 0;
+        if(useTT) {
+            hash = state.computeHash();
+            TranspositionTable.TTEntry entry = tt.get(hash);
+            if (entry != null && entry.depth >= depth) {
+                if (entry.type == TranspositionTable.NodeType.EXACT) {
+                    return entry.score;
+                } else if (entry.type == TranspositionTable.NodeType.LOWERBOUND) {
+                    alpha = Math.max(alpha, entry.score);
+                } else if (entry.type == TranspositionTable.NodeType.UPPERBOUND) {
+                    beta = Math.min(beta, entry.score);
+                }
+                if (alpha >= beta) {
+                    return entry.score;
+                }
             }
         }
 
         if (depth == 0 || state.isTerminal()) {
             double eval = evaluator.evaluate(state, aiPlayer);
-            tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT);
+            if(useTT) tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT);
             return eval;
         }
 
         List<AIMove> moves = moveGenerator.generateMoves(state);
         if (moves.isEmpty()) {
             double eval = evaluator.evaluate(state, aiPlayer);
-            tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT);
+            if(useTT) tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT);
             return eval;
+        }
+        if(useQuickEval) {
+            moves.sort((a, b) -> Double.compare(quickEval(state, b), quickEval(state, a)));
         }
 
         double originalAlpha = alpha;
@@ -157,7 +171,7 @@ public class Minimax {
         else if (bestEval >= originalBeta)
             type = TranspositionTable.NodeType.LOWERBOUND;
 
-        tt.put(hash, bestEval, depth, type);
+        if(useTT) tt.put(hash, bestEval, depth, type);
         return bestEval;
     }
 
