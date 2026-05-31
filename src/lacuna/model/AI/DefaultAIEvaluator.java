@@ -2,18 +2,18 @@ package lacuna.model.AI;
 
 public class DefaultAIEvaluator implements IAIEvaluator {
  
-    private static final int MAJORITY_BASE = 0;
-    private static final int DIFF_MULT = 30;
+    private static final int MAJORITY_BASE = 700;
+    private static final int DIFF_MULT = 20;
     private static final int DIFF_BONUS = 10;
     private static final int MAJORITY_WIN_THRESHOLD = 4;
     private static final int MAJORITY_WIN_BASE = 50000;
     private static final int MAJORITY_WIN_STEP = 5000;
     private static final int MAJORITY_THREE_BONUS = 1000;
 
-    private static final int QUICK_MYCOUNT_GT3 = 100;
-    private static final int QUICK_MYCOUNT_EQ3 = 100;
-    private static final int QUICK_OPP_COUNT_GE3 = 0;
-    private static final int QUICK_FLOWER_WEIGHT = 20;
+    private static final int QUICK_MYCOUNT_GT3 = 400;
+    private static final int QUICK_MYCOUNT_EQ3 = 250;
+    private static final int QUICK_OPP_COUNT_GE3 = 500;
+    private static final int QUICK_FLOWER_WEIGHT = 60;
 
     private static final double CF_WEIGHT_DEFAULT = 1.0;
     private static final double CF_WEIGHT_LESS = 3.0;

@@ -119,31 +119,69 @@ public class Minimax {
 
         if (depth == 0 || state.isTerminal()) {
             double eval = evaluator.evaluate(state, aiPlayer);
-            if(useTT) tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT);
+            if(useTT) tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT, null);
             return eval;
         }
 
         List<AIMove> moves = moveGenerator.generateMoves(state);
         if (moves.isEmpty()) {
             double eval = evaluator.evaluate(state, aiPlayer);
-            if(useTT) tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT);
+            if(useTT) tt.put(hash, eval, depth, TranspositionTable.NodeType.EXACT, null);
             return eval;
         }
-        if(useQuickEval) {
-            moves.sort((a, b) -> Double.compare(quickEval(state, b), quickEval(state, a)));
+        AIMove ttBestMove = null;
+        if (useTT && hash != 0) {
+            TranspositionTable.TTEntry entry = tt.get(hash);
+            if (entry != null) {
+                ttBestMove = entry.bestMove;
+            }
+        }
+
+        if (useQuickEval || ttBestMove != null) {
+            final AIMove finalTtBestMove = ttBestMove;
+            if (maximizing) {
+                moves.sort((a, b) -> {
+                    if (finalTtBestMove != null) {
+                        boolean aIsTt = (a.flower1Index == finalTtBestMove.flower1Index && a.flower2Index == finalTtBestMove.flower2Index);
+                        boolean bIsTt = (b.flower1Index == finalTtBestMove.flower1Index && b.flower2Index == finalTtBestMove.flower2Index);
+                        if (aIsTt && !bIsTt) return -1;
+                        if (!aIsTt && bIsTt) return 1;
+                    }
+                    if (useQuickEval) {
+                        return Double.compare(quickEval(state, b), quickEval(state, a));
+                    }
+                    return 0;
+                });
+            } else {
+                moves.sort((a, b) -> {
+                    if (finalTtBestMove != null) {
+                        boolean aIsTt = (a.flower1Index == finalTtBestMove.flower1Index && a.flower2Index == finalTtBestMove.flower2Index);
+                        boolean bIsTt = (b.flower1Index == finalTtBestMove.flower1Index && b.flower2Index == finalTtBestMove.flower2Index);
+                        if (aIsTt && !bIsTt) return -1;
+                        if (!aIsTt && bIsTt) return 1;
+                    }
+                    if (useQuickEval) {
+                        return Double.compare(quickEval(state, a), quickEval(state, b));
+                    }
+                    return 0;
+                });
+            }
         }
 
         double originalAlpha = alpha;
         double originalBeta = beta;
         double bestEval;
+        AIMove bestMoveForTT = null;
 
         if (maximizing) {
             double maxEval = Double.NEGATIVE_INFINITY;
             for (AIMove move : moves) {
                 AIState child = applyMove(state, move);
                 double eval = minimax(child, depth - 1, alpha, beta, false);
-                if (eval > maxEval)
+                if (eval > maxEval) {
                     maxEval = eval;
+                    bestMoveForTT = move;
+                }
                 if (eval > alpha)
                     alpha = eval;
                 if (beta <= alpha)
@@ -155,8 +193,10 @@ public class Minimax {
             for (AIMove move : moves) {
                 AIState child = applyMove(state, move);
                 double eval = minimax(child, depth - 1, alpha, beta, true);
-                if (eval < minEval)
+                if (eval < minEval) {
                     minEval = eval;
+                    bestMoveForTT = move;
+                }
                 if (eval < beta)
                     beta = eval;
                 if (beta <= alpha)
@@ -171,7 +211,7 @@ public class Minimax {
         else if (bestEval >= originalBeta)
             type = TranspositionTable.NodeType.LOWERBOUND;
 
-        if(useTT) tt.put(hash, bestEval, depth, type);
+        if(useTT) tt.put(hash, bestEval, depth, type, bestMoveForTT);
         return bestEval;
     }
 

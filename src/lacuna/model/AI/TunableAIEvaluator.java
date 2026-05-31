@@ -26,6 +26,7 @@ public class TunableAIEvaluator implements IAIEvaluator {
             int majorityWinThreshold, int majorityWinBase, int majorityWinStep, int majorityThreeBonus,
             int quickMyCountGt3, int quickMyCountEq3, int quickOppCountGe3, int quickFlowerWeight,
             double cfWeightDefault, double cfWeightLess, double cfWeightEqual, double cfWeightMyThree) {
+
         this.majorityBase = majorityBase;
         this.diffMult = diffMult;
         this.diffBonus = diffBonus;
@@ -62,8 +63,10 @@ public class TunableAIEvaluator implements IAIEvaluator {
                 finalOpp[c]++;
             } else {
                 int closestOwner = findClosestPawnOwner(state, f);
-                if (closestOwner == aiPlayer) finalAI[c]++;
-                else if (closestOwner == opponent) finalOpp[c]++;
+                if (closestOwner == aiPlayer)
+                    finalAI[c]++;
+                else if (closestOwner == opponent)
+                    finalOpp[c]++;
             }
         }
 
@@ -72,7 +75,8 @@ public class TunableAIEvaluator implements IAIEvaluator {
 
         for (int c = 0; c < numColors; c++) {
             int total = finalAI[c] + finalOpp[c];
-            if (total == 0) continue;
+            if (total == 0)
+                continue;
 
             int diff = finalAI[c] - finalOpp[c];
 
@@ -86,11 +90,15 @@ public class TunableAIEvaluator implements IAIEvaluator {
             score += diff * diffBonus;
         }
 
-        if (majAI >= majorityWinThreshold) score += majorityWinBase + (majAI - (majorityWinThreshold - 1)) * majorityWinStep;
-        if (majOpp >= majorityWinThreshold) score -= majorityWinBase - (majOpp - (majorityWinThreshold - 1)) * majorityWinStep;
+        if (majAI >= majorityWinThreshold)
+            score += majorityWinBase + (majAI - (majorityWinThreshold - 1)) * majorityWinStep;
+        if (majOpp >= majorityWinThreshold)
+            score -= majorityWinBase - (majOpp - (majorityWinThreshold - 1)) * majorityWinStep;
 
-        if (majAI == (majorityWinThreshold - 1)) score += majorityThreeBonus;
-        if (majOpp == (majorityWinThreshold - 1)) score -= majorityThreeBonus;
+        if (majAI == (majorityWinThreshold - 1))
+            score += majorityThreeBonus;
+        if (majOpp == (majorityWinThreshold - 1))
+            score -= majorityThreeBonus;
 
         return score;
     }
@@ -102,18 +110,23 @@ public class TunableAIEvaluator implements IAIEvaluator {
 
         int myCount = 0, oppCount = 0;
         for (int idx : state.colorGroups[colorOrd]) {
-            if (state.flowers[idx].ownerIndex == player) myCount++;
-            else if (state.flowers[idx].ownerIndex == 1 - player) oppCount++;
+            if (state.flowers[idx].ownerIndex == player)
+                myCount++;
+            else if (state.flowers[idx].ownerIndex == 1 - player)
+                oppCount++;
         }
         myCount += 2;
 
         double score = 0;
-        if (myCount > 3) score += quickMyCountGt3;
-        else if (myCount == 3) score += quickMyCountEq3;
-        if (oppCount >= 3) score += quickOppCountGe3;
+        if (myCount > 3)
+            score += quickMyCountGt3;
+        else if (myCount == 3)
+            score += quickMyCountEq3;
+        if (oppCount >= 3)
+            score += quickOppCountGe3;
 
         score += countFlowersWon(state, move.pawnX, move.pawnY,
-            move.flower1Index, move.flower2Index) * quickFlowerWeight;
+                move.flower1Index, move.flower2Index) * quickFlowerWeight;
 
         return (player == aiPlayer) ? score : -score;
     }
@@ -129,15 +142,19 @@ public class TunableAIEvaluator implements IAIEvaluator {
         int[] oppCount = new int[numColors];
         for (AIFlower f : state.flowers) {
             int c = f.color.ordinal();
-            if (f.ownerIndex == player) myCount[c]++;
-            else if (f.ownerIndex == opponent) oppCount[c]++;
+            if (f.ownerIndex == player)
+                myCount[c]++;
+            else if (f.ownerIndex == opponent)
+                oppCount[c]++;
         }
 
         double newPawnDistSq;
         for (int i = 0; i < state.flowers.length; i++) {
-            if (i == skipF1 || i == skipF2) continue;
+            if (i == skipF1 || i == skipF2)
+                continue;
             AIFlower f = state.flowers[i];
-            if (!f.isOnBoard()) continue;
+            if (!f.isOnBoard())
+                continue;
 
             double dx = px - f.x;
             double dy = py - f.y;
@@ -145,19 +162,24 @@ public class TunableAIEvaluator implements IAIEvaluator {
 
             double minExistingDistSq = Double.MAX_VALUE;
             for (AIPawn p : state.pawns) {
-                if (!p.placed) continue;
+                if (!p.placed)
+                    continue;
                 double ddx = p.x - f.x;
                 double ddy = p.y - f.y;
                 double dSq = ddx * ddx + ddy * ddy;
-                if (dSq < minExistingDistSq) minExistingDistSq = dSq;
+                if (dSq < minExistingDistSq)
+                    minExistingDistSq = dSq;
             }
 
             if (newPawnDistSq < minExistingDistSq) {
                 int c = f.color.ordinal();
                 double weight = cfWeightDefault;
-                if (myCount[c] < oppCount[c]) weight = cfWeightLess;
-                else if (myCount[c] == oppCount[c]) weight = cfWeightEqual;
-                else if (myCount[c] == (majorityWinThreshold - 1)) weight = cfWeightMyThree;
+                if (myCount[c] < oppCount[c])
+                    weight = cfWeightLess;
+                else if (myCount[c] == oppCount[c])
+                    weight = cfWeightEqual;
+                else if (myCount[c] == (majorityWinThreshold - 1))
+                    weight = cfWeightMyThree;
                 score += weight;
             }
         }
@@ -169,7 +191,8 @@ public class TunableAIEvaluator implements IAIEvaluator {
         int closestOwner = -1;
 
         for (AIPawn p : state.pawns) {
-            if (!p.placed) continue;
+            if (!p.placed)
+                continue;
             double dx = p.x - flower.x;
             double dy = p.y - flower.y;
             double dSq = dx * dx + dy * dy;

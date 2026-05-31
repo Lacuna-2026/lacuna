@@ -1,8 +1,5 @@
 package lacuna.model.AI;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class TranspositionTable {
 
     public enum NodeType {
@@ -10,37 +7,56 @@ public class TranspositionTable {
     }
 
     public static class TTEntry {
-        public final long hash;
-        public final double score;
-        public final int depth;
-        public final NodeType type;
-
-        public TTEntry(long hash, double score, int depth, NodeType type) {
-            this.hash = hash;
-            this.score = score;
-            this.depth = depth;
-            this.type = type;
+        public long hash;
+        public double score;
+        public int depth;
+        public NodeType type;
+        public boolean valid;
+        public AIMove bestMove;
+        
+        public TTEntry() {
+            this.valid = false;
         }
     }
 
-    private final Map<Long, TTEntry> table;
+    private static final int TABLE_SIZE = 1048576; // 2^20
+    private static final int TABLE_MASK = TABLE_SIZE - 1;
+    private final TTEntry[] table;
 
     public TranspositionTable() {
-        table = new HashMap<>();
+        table = new TTEntry[TABLE_SIZE];
+        for (int i = 0; i < TABLE_SIZE; i++) {
+            table[i] = new TTEntry();
+        }
     }
 
-    public void put(long hash, double score, int depth, NodeType type) {
-        TTEntry entry = table.get(hash);
-        if (entry == null || depth >= entry.depth) {
-            table.put(hash, new TTEntry(hash, score, depth, type));
+    public void put(long hash, double score, int depth, NodeType type, AIMove bestMove) {
+        int index = (int) (hash & TABLE_MASK);
+        TTEntry entry = table[index];
+        // Always replace if the new search is deeper or equal, or if the slot is empty
+        if (!entry.valid || depth >= entry.depth) {
+            entry.hash = hash;
+            entry.score = score;
+            entry.depth = depth;
+            entry.type = type;
+            entry.bestMove = bestMove;
+            entry.valid = true;
         }
     }
 
     public TTEntry get(long hash) {
-        return table.get(hash);
+        int index = (int) (hash & TABLE_MASK);
+        TTEntry entry = table[index];
+        if (entry.valid && entry.hash == hash) {
+            return entry;
+        }
+        return null;
     }
     
     public void clear() {
-        table.clear();
+        for (int i = 0; i < TABLE_SIZE; i++) {
+            table[i].valid = false;
+            table[i].bestMove = null;
+        }
     }
 }
