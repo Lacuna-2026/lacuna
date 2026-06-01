@@ -23,6 +23,7 @@ public class MainFrame extends JFrame {
     private PlayerPanel panelBottom;
     private GameController controleur;
     private TutorialOverlay tutorialOverlay;
+    private int demoMode;
 
     private JButton undoButton;
     private JButton redoButton;
@@ -79,7 +80,8 @@ public class MainFrame extends JFrame {
                 this::demarrerPartieAiVsAi,
                 this::chargerPartie,
                 this::afficherSessionRejointe,
-                this::afficherSessionCreee);
+                this::afficherSessionCreee,
+                this::lancerDemo);
 
         setMinimumSize(new Dimension(550, 620));
         setContentPane(menu);
@@ -90,12 +92,14 @@ public class MainFrame extends JFrame {
     private void demarrerPartieLocale(String nom1, String nom2) {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
+        demoMode = 0;
         construireInterface(nom1, nom2, false, 0, false, 0, null, -1);
     }
 
     private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
+        demoMode = 0;
         int depth = 1;
         String iaName = "IA (Facile)";
         if ("Moyen".equalsIgnoreCase(niveau)) {
@@ -111,6 +115,7 @@ public class MainFrame extends JFrame {
     private void demarrerPartieAiVsAi(String level1, String level2) {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
+        demoMode = 0;
         int depth1 = 1;
         String ia1Name = "IA 1 (Facile)";
         if ("Moyen".equalsIgnoreCase(level1)) {
@@ -343,6 +348,7 @@ public class MainFrame extends JFrame {
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
         plateau = new BoardPanel(modele);
+        plateau.setDemoMode(demoMode);
         TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
         OnlineSessionConnection networkSession = this.onlineSessionConnection;
@@ -401,6 +407,12 @@ public class MainFrame extends JFrame {
         footerBar.setOpaque(false);
         footerBar.add(bottomLeftBar, BorderLayout.WEST);
         footerBar.add(bottomRightBar, BorderLayout.EAST);
+        if (demoMode > 0) {
+            JPanel bottomCenterBar = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 6));
+            bottomCenterBar.setOpaque(false);
+            bottomCenterBar.add(createDemoNextButton());
+            footerBar.add(bottomCenterBar, BorderLayout.CENTER);
+        }
 
         JPanel hud = new JPanel(new BorderLayout());
         hud.setOpaque(false);
@@ -573,6 +585,7 @@ public class MainFrame extends JFrame {
     }
 
     private void chargerPartie() {
+        demoMode = 0;
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Charger une partie");
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -713,7 +726,142 @@ public class MainFrame extends JFrame {
     public void retourMenuPrincipal() {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
+        demoMode = 0;
         afficherMenu();
+    }
+
+    private void lancerDemo() {
+        fermerSessionEnLigneActuelle();
+        isOnlineSession = false;
+        demoMode = 1;
+        GameModel model = creerModelDemoVoronoi();
+        afficherInterfaceJeu(model, false, 0, false, 0, null, -1);
+    }
+
+    private void afficherDemoJeu() {
+        demoMode = 2;
+        GameModel model = creerModelDemoJeu();
+        afficherInterfaceJeu(model, false, 0, false, 0, null, -1);
+    }
+
+    private void setGamePhase(GameModel model, GameModel.GamePhase phase) {
+        try {
+            java.lang.reflect.Field field = GameModel.class.getDeclaredField("phase");
+            field.setAccessible(true);
+            field.set(model, phase);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private GameModel creerModelDemoVoronoi() {
+        GameModel model = new GameModel("Orange", "Bleu", 0, 42L, false);
+        double[][] p0Coords = {
+            {-0.4, -0.4},
+            {0.3, 0.4},
+            {-0.2, 0.5},
+            {0.5, -0.3},
+            {-0.1, -0.6},
+            {0.2, 0.1}
+        };
+        double[][] p1Coords = {
+            {0.1, -0.5},
+            {-0.5, 0.1},
+            {0.3, 0.6},
+            {-0.3, -0.2},
+            {0.6, 0.2},
+            {-0.6, 0.5}
+        };
+        
+        lacuna.model.Player p0 = model.getJoueurs()[0];
+        lacuna.model.Player p1 = model.getJoueurs()[1];
+        
+        for (int i = 0; i < 6; i++) {
+            lacuna.model.Pawn pawn0 = p0.getPawns().get(i);
+            pawn0.place(p0Coords[i][0], p0Coords[i][1]);
+            p0.incrementPawnsPlaced();
+            
+            lacuna.model.Pawn pawn1 = p1.getPawns().get(i);
+            pawn1.place(p1Coords[i][0], p1Coords[i][1]);
+            p1.incrementPawnsPlaced();
+        }
+        
+        setGamePhase(model, GameModel.GamePhase.RESOLVING);
+        return model;
+    }
+
+    private GameModel creerModelDemoJeu() {
+        GameModel model = new GameModel("Orange", "Bleu", 0, 42L, false);
+        java.util.List<lacuna.model.Flower> list = model.getFleurs();
+        int placedCount = 0;
+        for (int i = 0; i < list.size() && placedCount < 6; i++) {
+            lacuna.model.Flower f1 = list.get(i);
+            if (!f1.isOnBoard()) continue;
+            for (int j = i + 1; j < list.size() && placedCount < 6; j++) {
+                lacuna.model.Flower f2 = list.get(j);
+                if (!f2.isOnBoard()) continue;
+                if (f1.getColor() == f2.getColor()) {
+                    double px = (f1.getX() + f2.getX()) / 2.0;
+                    double py = (f1.getY() + f2.getY()) / 2.0;
+                    if (model.estLigneValide(f1, f2)) {
+                        model.placerPionEtCapturer(f1, f2, px, py);
+                        placedCount++;
+                        break;
+                    }
+                }
+            }
+        }
+        return model;
+    }
+
+    private JButton createDemoNextButton() {
+        JButton btn = new JButton("SUIVANT →") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
+                    g2.setColor(new Color(104, 214, 132, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
+            }
+        };
+
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btn.setMargin(new Insets(0, 0, 0, 0));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setPreferredSize(new Dimension(120, 32));
+        btn.addActionListener(e -> {
+            if (demoMode == 1) {
+                afficherDemoJeu();
+            } else {
+                demoMode = 0;
+                retourMenuPrincipal();
+            }
+        });
+        return btn;
     }
 
     public void annulerCoup() {

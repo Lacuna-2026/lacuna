@@ -390,7 +390,11 @@ public final class BoardRenderer {
 
         for (ResolutionAnimator.ResolutionStep step : phase.steps()) {
             g2.setColor(withAlpha(playerColor, 0.32f * lineFade));
-            g2.drawLine(step.pawnX(), step.pawnY(), step.flowerX(), step.flowerY());
+            int px = geometry.toScreenX(step.pawn().getX());
+            int py = geometry.toScreenY(step.pawn().getY()) - geometry.pawnSize() / 8;
+            int fx = geometry.toScreenX(step.flower().getX());
+            int fy = geometry.toScreenY(step.flower().getY());
+            g2.drawLine(px, py, fx, fy);
             
             if (phase.isCaptured()) {
                 drawFlyingFlower(g2, phase, step);
@@ -469,14 +473,16 @@ public final class BoardRenderer {
         }
 
         Point targetPos = getScoreItemCenter(targetPanel, step.flower().getColor());
-        float vanish = resolution.vanishProgress(); // 0.0 to 1.0
+        float vanish = resolution.vanishProgress();
         double eased = AnimationMath.smooth(vanish);
 
-        double x = step.flowerX() + (targetPos.x - step.flowerX()) * eased;
-        double y = step.flowerY() + (targetPos.y - step.flowerY()) * eased;
+        int fx = geometry.toScreenX(step.flower().getX());
+        int fy = geometry.toScreenY(step.flower().getY());
+        double x = fx + (targetPos.x - fx) * eased;
+        double y = fy + (targetPos.y - fy) * eased;
 
         double startSize = geometry.flowerSize();
-        double endSize = 22.0; // matching ICON_SIZE in PlayerPanel
+        double endSize = 22.0;
         double size = startSize + (endSize - startSize) * eased;
 
         double angle = eased * Math.PI * 2.0;

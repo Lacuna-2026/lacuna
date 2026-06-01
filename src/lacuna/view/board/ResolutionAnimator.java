@@ -4,6 +4,7 @@ import lacuna.model.Flower;
 import lacuna.model.GameModel;
 import lacuna.model.Pawn;
 import lacuna.model.Player;
+import lacuna.view.BoardPanel;
 
 import javax.swing.JComponent;
 import javax.swing.Timer;
@@ -96,12 +97,19 @@ public final class ResolutionAnimator {
         }
 
         if (elapsed >= PHASE_MS) {
-            phaseIndex++;
-            if (phaseIndex >= phases.size()) {
-                finish();
-                return;
+            if (phaseIndex < phases.size() - 1) {
+                phaseIndex++;
+                phaseStartedAt = now;
+            } else {
+                if (component instanceof BoardPanel && ((BoardPanel) component).getDemoMode() == 1) {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                } else {
+                    finish();
+                    return;
+                }
             }
-            phaseStartedAt = now;
         }
 
         component.repaint();

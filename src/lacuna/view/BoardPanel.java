@@ -67,6 +67,16 @@ public class BoardPanel extends JPanel implements ModelListener {
     private Point placementIntentionPoint = null;
     private FlowerPair lastPhantomPair = null;
 
+    private int demoMode = 0;
+
+    public void setDemoMode(int mode) {
+        this.demoMode = mode;
+    }
+
+    public int getDemoMode() {
+        return demoMode;
+    }
+
     public BoardPanel(GameModel model) {
         this.model = model;
         this.geometry = new BoardGeometry(this);
@@ -135,26 +145,36 @@ public class BoardPanel extends JPanel implements ModelListener {
     @Override
     public void addNotify() {
         super.addNotify();
-        cylinderIntro.start(geometry, () -> {
-            if (controller != null && model.estNouvellePartieNonCommencee()) {
-                if (controller.isLocalMatch() || controller.isHost()) {
-                    JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-                    String name1 = model.getJoueurs()[0].getName();
-                    String name2 = model.getJoueurs()[1].getName();
-                    int starterIndex = StartingPlayerDialog.show(frame, name1, name2);
-                    if (starterIndex == -1) {
-                        starterIndex = 0;
-                    }
-                    controller.demarrerPartieAvecStarter(starterIndex);
-                } else {
-                    controller.declencherCoupIASiNecessaire();
-                }
+        if (demoMode > 0) {
+            if (demoMode == 1) {
+                jouerAnimationResolution(null);
             } else {
                 if (controller != null) {
                     controller.declencherCoupIASiNecessaire();
                 }
             }
-        });
+        } else {
+            cylinderIntro.start(geometry, () -> {
+                if (controller != null && model.estNouvellePartieNonCommencee()) {
+                    if (controller.isLocalMatch() || controller.isHost()) {
+                        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                        String name1 = model.getJoueurs()[0].getName();
+                        String name2 = model.getJoueurs()[1].getName();
+                        int starterIndex = StartingPlayerDialog.show(frame, name1, name2);
+                        if (starterIndex == -1) {
+                            starterIndex = 0;
+                        }
+                        controller.demarrerPartieAvecStarter(starterIndex);
+                    } else {
+                        controller.declencherCoupIASiNecessaire();
+                    }
+                } else {
+                    if (controller != null) {
+                        controller.declencherCoupIASiNecessaire();
+                    }
+                }
+            });
+        }
     }
 
     @Override

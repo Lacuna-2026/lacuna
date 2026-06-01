@@ -94,25 +94,34 @@ public class MainMenuPanel extends JPanel {
     private OnlineSessionConnection createdSessionConnection;
     private SwingWorker<PeerJoinResult, Void> peerWaitWorker;
 
+    private final Runnable onDemo;
+    private final SecondaryButton demoButton;
+
     public MainMenuPanel(
             LocalPlayCallback onLocalPlay,
             AiPlayCallback onAiPlay,
             AiVsAiPlayCallback onAiVsAiPlay,
             Runnable onLoadPlay,
             Consumer<OnlineSessionConnection> onFriendSessionJoined,
-            Consumer<OnlineSessionConnection> onCreatedSessionJoined) {
+            Consumer<OnlineSessionConnection> onCreatedSessionJoined,
+            Runnable onDemo) {
         this.onLocalPlay = onLocalPlay;
         this.onAiPlay = onAiPlay;
         this.onAiVsAiPlay = onAiVsAiPlay;
         this.onLoadPlay = onLoadPlay;
         this.onFriendSessionJoined = onFriendSessionJoined;
         this.onCreatedSessionJoined = onCreatedSessionJoined;
+        this.onDemo = onDemo;
         this.modeSelect = new SegmentedChoice(MODE_NORMAL, MODE_AI, MODE_ONLINE);
         this.modeFields = MenuTheme.verticalPanel();
         this.playButton = new PrimaryButton("Jouer Lacuna");
         this.loadGameButton = new SecondaryButton("Charger une partie");
         this.loadGameButton.addActionListener((ActionEvent e) -> {
             onLoadPlay.run();
+        });
+        this.demoButton = new SecondaryButton("Démo");
+        this.demoButton.addActionListener((ActionEvent e) -> {
+            onDemo.run();
         });
         this.serverClient = new LacunaServerClient();
 
@@ -191,7 +200,18 @@ public class MainMenuPanel extends JPanel {
         controls.add(Box.createVerticalStrut(28));
         controls.add(playButton);
         controls.add(Box.createVerticalStrut(12));
-        controls.add(loadGameButton);
+        
+        JPanel buttonRow = new JPanel();
+        buttonRow.setOpaque(false);
+        buttonRow.setLayout(new BoxLayout(buttonRow, BoxLayout.X_AXIS));
+        buttonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        MenuTheme.size(loadGameButton, 195, 54, 195, 54);
+        MenuTheme.size(demoButton, 195, 54, 195, 54);
+        buttonRow.add(loadGameButton);
+        buttonRow.add(Box.createHorizontalStrut(10));
+        buttonRow.add(demoButton);
+        controls.add(buttonRow);
+        
         controls.add(Box.createVerticalGlue());
 
         return controls;
@@ -228,7 +248,7 @@ public class MainMenuPanel extends JPanel {
         playButton.addActionListener((ActionEvent e) -> {
             String nom1 = valueOrDefault(playerOne.getText(), "Joueur 1");
             String nom2 = valueOrDefault(playerTwo.getText(), "Joueur 2");
-            onPlay.start(nom1, nom2, 0);
+            onLocalPlay.accept(nom1, nom2);
         });
 
         refreshFields();
@@ -678,6 +698,9 @@ public class MainMenuPanel extends JPanel {
         if (loadGameButton != null && playButton != null) {
             loadGameButton.setEnabled(playButton.isEnabled());
         }
+        if (demoButton != null && playButton != null) {
+            demoButton.setEnabled(playButton.isEnabled());
+        }
     }
 
     private void joinFriendSession() {
@@ -960,6 +983,10 @@ public class MainMenuPanel extends JPanel {
         if (loadGameButton != null && playButton != null) {
             loadGameButton.setVisible(playButton.isVisible());
             loadGameButton.setEnabled(playButton.isEnabled());
+        }
+        if (demoButton != null && playButton != null) {
+            demoButton.setVisible(playButton.isVisible());
+            demoButton.setEnabled(playButton.isEnabled());
         }
         modeFields.revalidate();
         modeFields.repaint();
